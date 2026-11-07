@@ -59,7 +59,7 @@ export interface Trace {
     [extra: string]: unknown
   }
   events: TraceEvent[]
-  /** The keyboard-dock states during the run, when a keyboard was passed to `record()`. */
+  /** The keybry states during the run, when a keyboard was passed to `record()`. */
   states?: [t: number, state: KeyboardState][]
 }
 

@@ -24,7 +24,7 @@ createServer(async (req, res) => {
     res.writeHead(404).end('Not found')
   }
 }).listen(port, '0.0.0.0', () => {
-  console.log(`\n  keyboard-dock demo\n\n  This computer:  http://localhost:${port}/`)
+  console.log(`\n  keybry demo\n\n  This computer:  http://localhost:${port}/`)
   for (const list of Object.values(networkInterfaces()))
     for (const a of list ?? []) if (a.family == 'IPv4' && !a.internal) console.log(`  Phone (Wi-Fi):  http://${a.address}:${port}/`)
   console.log(

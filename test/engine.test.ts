@@ -66,7 +66,7 @@ describe('Android Chrome, measured from the visual viewport', () => {
   it('learns: the second time the prediction is exact and the bar moves once', () => {
     const storage = new Map<string, string>()
     run(storage)
-    expect(JSON.parse(storage.get('keyboard-dock')!)).toEqual({ textP412x915: KB })
+    expect(JSON.parse(storage.get('keybry')!)).toEqual({ textP412x915: KB })
     const r = run(storage)
     expect(at(r, 120)).toMatchObject({ phase: 'opening', height: KB })
     expect(reversals(r.states)).toBe(1) // up once, down once
@@ -100,7 +100,7 @@ describe('Android Chrome, measured from the visual viewport', () => {
         .end(4000),
       { storage },
     )
-    expect(JSON.parse(storage.get('keyboard-dock')!)).toEqual({ textP412x915: KB, numberP412x915: 220 })
+    expect(JSON.parse(storage.get('keybry')!)).toEqual({ textP412x915: KB, numberP412x915: 220 })
   })
 })
 
@@ -225,7 +225,7 @@ describe('no on-screen keyboard', () => {
     const second = run()
     expect(at(second, 120)).toMatchObject({ height: 55 }) // learned: straight to the strip
     expect(reversals(second.states)).toBe(1)
-    expect(JSON.parse(storage.get('keyboard-dock')!).wait).toBeUndefined() // a strip is not a slow keyboard
+    expect(JSON.parse(storage.get('keybry')!).wait).toBeUndefined() // a strip is not a slow keyboard
   })
 
   it('a slow keyboard is waited for longer next time, instead of bouncing every time', () => {
@@ -253,7 +253,7 @@ describe('no on-screen keyboard', () => {
       trace(PIXEL).at(100, 'focusin', {}, TEXT).keyboard(700, 48).keyboard(1500, KB).at(3000, 'focusout').end(4000),
       { storage },
     )
-    expect(JSON.parse(storage.get('keyboard-dock')!).wait).toBeGreaterThan(500)
+    expect(JSON.parse(storage.get('keybry')!).wait).toBeGreaterThan(500)
   })
 
   it('desktop: focusing and resizing the window never opens', () => {
@@ -335,7 +335,7 @@ describe('rotation', () => {
       { storage },
     )
     expect(r.final).toMatchObject({ phase: 'open', height: 200 })
-    expect(JSON.parse(storage.get('keyboard-dock')!)).toMatchObject({ textL412x915: 200 })
+    expect(JSON.parse(storage.get('keybry')!)).toMatchObject({ textL412x915: 200 })
   })
 
   it('a page wider than the screen does not count as landscape', () => {
@@ -343,7 +343,7 @@ describe('rotation', () => {
     // Chrome Android, and the portrait keyboard got saved under landscape.
     const storage = new Map<string, string>()
     replay(trace(PIXEL).at(100, 'focusin', { iw: 421 }, TEXT).keyboard(400, KB).end(1500), { storage })
-    expect(JSON.parse(storage.get('keyboard-dock')!)).toEqual({ textP412x915: KB })
+    expect(JSON.parse(storage.get('keybry')!)).toEqual({ textP412x915: KB })
   })
 
   it('a shorter landscape viewport is not mistaken for a keyboard', () => {

@@ -171,7 +171,7 @@ button,
   }
 }
 
-/* The docked composer: anchored to the bottom, moved by keyboard-dock with a transform. */
+/* The docked composer: anchored to the bottom, moved by keybry with a transform. */
 .composer {
   position: fixed;
   left: 0;

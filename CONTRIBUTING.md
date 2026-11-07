@@ -1,6 +1,6 @@
 # Contributing
 
-The most useful contribution needs no code: run the [guided test](https://akdoescodes.github.io/keyboard-dock/) on your phone and send the trace. Every trace becomes a permanent test.
+The most useful contribution needs no code: run the [guided test](https://akdoescodes.github.io/keybry/) on your phone and send the trace. Every trace becomes a permanent test.
 
 ## Setup
 

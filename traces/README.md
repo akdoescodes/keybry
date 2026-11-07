@@ -35,6 +35,6 @@ Each `.json` file here is a recording of what one browser on one device reported
 - **Sample:** `iw`/`ih` are `innerWidth`/`innerHeight`. `w`/`h`/`top`/`scale` are the visual viewport. `kb`/`ov` are the VirtualKeyboard rect height and `overlaysContent`, where the API exists.
 - **Event types:** `init`, `focusin`, `focusout`, `click`, `vv.resize`, `vv.scroll`, `resize`, `geometrychange`, `mark` (a guided-test step or answer), and `frame`.
 - **`frame`** is not a browser event. After anything happens, the recorder checks every animation frame for a second and logs changes the browser didn't announce. This is how a trace shows what the keyboard did between events, for example whether iOS reports every frame or only at the end.
-- **`states`** is what keyboard-dock itself decided during the recording, useful for comparing against the replay.
+- **`states`** is what keybry itself decided during the recording, useful for comparing against the replay.
 
 Traces hold no typed text: only sizes, timings, the element type that had focus, and the user agent.

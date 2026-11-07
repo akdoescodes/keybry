@@ -1,7 +1,7 @@
 import { dock, keyboard } from './lib/index.js'
 import { record } from './lib/recorder.js'
 
-const REPO = 'akdoescodes/keyboard-dock'
+const REPO = 'akdoescodes/keybry'
 const $ = (id) => document.getElementById(id)
 const root = document.documentElement
 const composer = $('composer')
@@ -241,7 +241,7 @@ $('share').addEventListener('click', () => {
 // ---------------------------------------------------------------- details: what this browser reports
 
 const details = $('details')
-const STORE = 'keyboard-dock' // where the library saves heights
+const STORE = 'keybry' // where the library saves heights
 
 const savedHeights = () => {
   try {

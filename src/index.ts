@@ -75,7 +75,7 @@ const { max, min, round } = Math
 
 /** Written on <html>, for CSS: `transform: translateY(calc(-1 * var(--keyboard-height)))`. */
 const VAR = '--keyboard-height'
-const STORE = 'keyboard-dock'
+const STORE = 'keybry'
 /** A keyboard costs far more height than browser toolbars collapsing or expanding. */
 const MIN = 120
 /** After focus leaves a field, wait this long for another field to take it before closing. */

@@ -1,13 +1,13 @@
-# keyboard-dock
+# keybry
 
 **Keep chat bars and toolbars on top of the mobile keyboard. They move _with_ the keyboard, not after it.**
 
-[![npm](https://img.shields.io/npm/v/keyboard-dock)](https://www.npmjs.com/package/keyboard-dock)
+[![npm](https://img.shields.io/npm/v/keybry)](https://www.npmjs.com/package/keybry)
 [![size](https://img.shields.io/badge/core-1.7%20kB%20brotli-blue)](./.size-limit.json)
-[![CI](https://github.com/akdoescodes/keyboard-dock/actions/workflows/ci.yml/badge.svg)](https://github.com/akdoescodes/keyboard-dock/actions/workflows/ci.yml)
-[![license](https://img.shields.io/npm/l/keyboard-dock)](./LICENSE)
+[![CI](https://github.com/akdoescodes/keybry/actions/workflows/ci.yml/badge.svg)](https://github.com/akdoescodes/keybry/actions/workflows/ci.yml)
+[![license](https://img.shields.io/npm/l/keybry)](./LICENSE)
 
-**[Try it on your phone →](https://akdoescodes.github.io/keyboard-dock/)**
+**[Try it on your phone →](https://akdoescodes.github.io/keybry/)**
 
 - **On time.** It starts moving the moment a field is tapped, using the height it saved on this device last time.
 - **Exact where possible.** Uses Chrome's VirtualKeyboard API (Chrome, Edge, Samsung Internet), and the visual viewport everywhere else.
@@ -16,7 +16,7 @@
 - **Small.** Under 1.7 kB min+brotli, with zero dependencies, and it's safe for server rendering.
 
 ```sh
-npm install keyboard-dock
+npm install keybry
 ```
 
 ## The problem
@@ -51,7 +51,7 @@ The second time a keyboard opens on a device, the prediction is already exact, s
 ### Plain JavaScript (any framework)
 
 ```js
-import { dock } from 'keyboard-dock'
+import { dock } from 'keybry'
 
 dock(document.querySelector('.composer')) // returns an undock() function
 ```
@@ -81,7 +81,7 @@ dock(document.querySelector('.composer')) // returns an undock() function
 ### React
 
 ```jsx
-import { KeyboardDock, useKeyboard } from 'keyboard-dock/react'
+import { KeyboardDock, useKeyboard } from 'keybry/react'
 
 function Chat() {
   const open = useKeyboard((s) => s.open) // re-renders only when `open` changes
@@ -117,7 +117,7 @@ onUnmounted(() => undock())
 ### Reading the state
 
 ```js
-import { keyboard } from 'keyboard-dock'
+import { keyboard } from 'keybry'
 
 const kb = keyboard()
 kb.subscribe((s) => console.log(s.open, s.height, s.phase, s.source))
@@ -133,7 +133,7 @@ kb.subscribe((s) => console.log(s.open, s.height, s.phase, s.source))
 ## API
 
 ```ts
-import { keyboard, dock, createKeyboard } from 'keyboard-dock'
+import { keyboard, dock, createKeyboard } from 'keybry'
 ```
 
 - **`keyboard()`** returns the shared tracker for the page. It's created on first use.
@@ -144,20 +144,20 @@ import { keyboard, dock, createKeyboard } from 'keyboard-dock'
   - `win`: the window to read. Tests pass a fake one.
 - A **`Keyboard`** has `state`, `subscribe(fn) → unsubscribe`, `dock(el) → undock` and `destroy()`.
 
-From `keyboard-dock/react`:
+From `keybry/react`:
 
 - **`useKeyboard()`** returns the full state.
 - **`useKeyboard(select)`** returns a selected value and re-renders only when it changes.
 - **`<KeyboardDock as? ...props>`** renders a docked element.
 
-From `keyboard-dock/recorder` (a separate import, not part of the core):
+From `keybry/recorder` (a separate import, not part of the core):
 
 - **`record({ keyboard? })`** returns `{ trace, mark(note), stop() }`. It logs every keyboard-related event as a trace you can replay in tests.
 
 ## Good to know
 
 - **Use 16px or larger text in inputs.** Smaller text makes iOS zoom the page on focus, which moves everything.
-- **While something is docked, Chrome stops shrinking the page for the keyboard.** The exact numbers need `navigator.virtualKeyboard.overlaysContent = true`, which keyboard-dock switches on only while at least one element is docked, then restores. Other inputs on the page aren't scrolled into view automatically during that time.
+- **While something is docked, Chrome stops shrinking the page for the keyboard.** The exact numbers need `navigator.virtualKeyboard.overlaysContent = true`, which keybry switches on only while at least one element is docked, then restores. Other inputs on the page aren't scrolled into view automatically during that time.
 - **`dock()` takes over the element's inline `transform`.** Put your own transforms on a wrapper.
 - **The first open on a device is a guess.** It's deliberately on the tall side, because a bar that starts a little high and settles looks fine, and a bar hidden behind the keyboard does not. From the second open, the saved height is used.
 - **Short strips count too.** The iPad shortcut bar shown with a hardware keyboard, or Chrome's autofill bar, is far shorter than a keyboard. The bar still sits on top of it.
@@ -165,7 +165,7 @@ From `keyboard-dock/recorder` (a separate import, not part of the core):
 
 ## Help it work on your phone
 
-Real phones are the test suite. The [test page](https://akdoescodes.github.io/keyboard-dock/) has a two-minute guided test. It records what your browser reports, saves it as a file, and opens a GitHub issue for you to attach it to. Each trace goes into [`traces/`](./traces) and runs in CI on every change from then on.
+Real phones are the test suite. The [test page](https://akdoescodes.github.io/keybry/) has a two-minute guided test. It records what your browser reports, saves it as a file, and opens a GitHub issue for you to attach it to. Each trace goes into [`traces/`](./traces) and runs in CI on every change from then on.
 
 Traces that would help most right now:
 

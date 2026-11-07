@@ -1,5 +1,5 @@
 {
-  "name": "keyboard-dock",
+  "name": "keybry",
   "version": "0.1.0",
   "description": "Keep chat bars and toolbars glued to the mobile keyboard. Predicts the keyboard before it opens, measures it, and learns. Under 1.7 KB, zero dependencies.",
   "keywords": [
@@ -20,10 +20,10 @@
   "author": "Arjun Kale",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/akdoescodes/keyboard-dock.git"
+    "url": "git+https://github.com/akdoescodes/keybry.git"
   },
-  "homepage": "https://akdoescodes.github.io/keyboard-dock/",
-  "bugs": "https://github.com/akdoescodes/keyboard-dock/issues",
+  "homepage": "https://akdoescodes.github.io/keybry/",
+  "bugs": "https://github.com/akdoescodes/keybry/issues",
   "type": "module",
   "sideEffects": false,
   "exports": {

@@ -1,6 +1,6 @@
 # Design
 
-How keyboard-dock decides where the keyboard is, and why. Read this before changing `src/index.ts`.
+How keybry decides where the keyboard is, and why. Read this before changing `src/index.ts`.
 
 ## Three layers, one closure
 
@@ -44,7 +44,7 @@ A prediction that sees no keyboard within `wait` (500 ms) is dropped, and 0 is s
 
 ## Changes from the first plan
 
-- **One package with subpath imports** (`keyboard-dock`, `/react`, `/recorder`) instead of three packages. It's one install and one version, and the React wrapper always shares the core's instance.
+- **One package with subpath imports** (`keybry`, `/react`, `/recorder`) instead of three packages. It's one install and one version, and the React wrapper always shares the core's instance.
 - **`win` instead of a separate env module.** Passing in a window-shaped object gives the same "record once, replay forever" with no extra code in the bundle.
 - **No `closing` phase.** Closing is a single move to 0. A separate phase would cost one more React render per close and tell an app nothing it can act on.
 - **The built-in table is ratios, not a device list.** It needs no maintenance, and the first real open on a device replaces it anyway.

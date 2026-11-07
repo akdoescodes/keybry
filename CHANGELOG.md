@@ -6,5 +6,5 @@ First release.
 
 - `dock(el)`, `keyboard()` and `createKeyboard()`: predict, measure, correct and learn the keyboard height.
 - `--keyboard-height` CSS variable on `<html>`.
-- `keyboard-dock/react`: `useKeyboard(select?)` and `<KeyboardDock>`.
-- `keyboard-dock/recorder`: `record()` for device traces.
+- `keybry/react`: `useKeyboard(select?)` and `<KeyboardDock>`.
+- `keybry/recorder`: `record()` for device traces.
