@@ -1,5 +1,8 @@
 # Publishes to npm when a version tag is pushed: `npm version patch && git push --follow-tags`.
-# One-time setup: add an npm automation token as the NPM_TOKEN repository secret.
+#
+# Uses npm trusted publishing, so there is no token to store or renew. One-time setup, after the
+# first version is on npm: npmjs.com > package keybry > Settings > Trusted publisher > GitHub Actions,
+# with owner akdoescodes, repository keybry, workflow release.yml.
 name: Release
 
 on:
@@ -8,7 +11,7 @@ on:
 
 permissions:
   contents: read
-  id-token: write # npm provenance
+  id-token: write # trusted publishing; npm also attaches provenance with it
 
 jobs:
   publish:
@@ -20,8 +23,7 @@ jobs:
           node-version: 24
           cache: npm
           registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@latest # trusted publishing needs npm 11.5.1 or newer
       - run: npm ci
       # prepublishOnly runs typecheck, tests, build and the size check first.
-      - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - run: npm publish --access public
