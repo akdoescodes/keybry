@@ -13,7 +13,7 @@
 - **Exact where possible.** Uses Chrome's VirtualKeyboard API (Chrome, Edge, Samsung Internet), and the visual viewport everywhere else.
 - **No bounce.** Hopping between fields, or the keyboard closing and reopening, doesn't make the bar jump.
 - **Fast.** Moves your element with a GPU transform. No layout, no React re-renders.
-- **Small.** Under 1.7 kB min+brotli, with zero dependencies, and it's safe for server rendering.
+- **Small.** About 1.7 kB min+brotli, with zero dependencies, and it's safe for server rendering.
 
 ```sh
 npm install keybry
@@ -164,7 +164,7 @@ import { keyboard, dock, createKeyboard } from 'keybry'
 - **`dock(el)`** keeps `el` above the keyboard and returns `undock()`. It's shorthand for `keyboard().dock(el)`.
 - **`createKeyboard(options?)`** creates a separate tracker. You only need this for tests and custom timings:
   - `wait` (default `1000`): ms to wait for an on-screen keyboard before deciding there isn't one (hardware keyboard, floating iPad keyboard). It grows by itself on devices whose keyboard is slower than that.
-  - `settle` (default `300`): ms a shrinking keyboard must hold before the UI follows it down. This is what stops the bounce.
+  - `settle` (default `300`): when the keyboard closes within half a second of focus moving to another field, it may be about to reopen, so the bar waits this many ms before following. This is what stops the bounce. Any other close (tapping outside, Done, the Android Back button) moves the bar at once.
   - `win`: the window to read. Tests pass a fake one.
 - A **`Keyboard`** has `state`, `subscribe(fn) → unsubscribe`, `dock(el) → undock` and `destroy()`.
 

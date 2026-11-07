@@ -380,7 +380,8 @@ describe('no bounce', () => {
     expect(r.states.filter(([t]) => t > 500).every(([, s]) => s.height == KB)).toBe(true)
   })
 
-  it('Android back button hides the keyboard with focus kept: closes after settle, tap reopens', () => {
+  it('Android back button hides the keyboard with focus kept: the bar goes down at once, tap reopens', () => {
+    // Focus hasn't moved for a while, so the keyboard is really closing, not dipping between fields.
     const r = replay(
       opened()
         .keyboard(2000, 0) // back button
@@ -389,15 +390,22 @@ describe('no bounce', () => {
         .end(5000),
       { storage: storage() },
     )
-    expect(at(r, 2000 + 100)).toMatchObject({ phase: 'open' }) // waiting out a possible dip
-    expect(at(r, 2000 + 400)).toMatchObject({ phase: 'closed', height: 0 })
+    expect(at(r, 2000 + 20)).toMatchObject({ phase: 'closed', height: 0 })
     expect(at(r, 4020)).toMatchObject({ phase: 'opening', height: KB }) // predicted on tap
     expect(r.final).toMatchObject({ phase: 'open', height: KB })
   })
 
-  it('tapping outside closes within a frame of the blur grace', () => {
+  it('Back right after focus moved is treated as a possible dip and waits', () => {
+    const r = replay(opened().at(2000, 'focusout').at(2000, 'focusin', {}, OTHER).keyboard(2200, 0).end(3500), {
+      storage: storage(),
+    })
+    expect(at(r, 2200 + 100)).toMatchObject({ phase: 'open' })
+    expect(r.final).toMatchObject({ phase: 'closed' })
+  })
+
+  it('tapping outside closes within a couple of frames, before the browser even reports it', () => {
     const r = replay(opened().at(2000, 'focusout').keyboard(2300, 0).end(3000))
-    expect(at(r, 2000 + 120)).toMatchObject({ phase: 'closed', height: 0 })
+    expect(at(r, 2000 + 50)).toMatchObject({ phase: 'closed', height: 0 })
   })
 })
 
@@ -432,6 +440,52 @@ describe('rotation', () => {
         .end(4000),
     )
     expect(r.final).toMatchObject({ open: false, phase: 'closed' })
+  })
+})
+
+describe('how the bar moves when the keyboard closes', () => {
+  /** Opens the keyboard on a fake window, then closes it with `close`; returns the docked element's transition. */
+  const closeWith = (device: typeof PIXEL, close: (env: ReturnType<typeof fakeWindow>) => void) => {
+    vi.useFakeTimers({ now: 0 })
+    const t = trace(device).trace
+    const env = fakeWindow(t.meta, t.events[0][2])
+    const kb = createKeyboard({ win: env.win })
+    const el = { style: {} as CSSStyleDeclaration } as HTMLElement
+    kb.dock(el)
+    env.doc.activeElement = element(TEXT)
+    env.fire('focusin', TEXT)
+    vi.advanceTimersByTime(100)
+    if (device.vk) env.apply({ ...t.events[0][2], kb: KB, ov: true }), env.fire('geometrychange')
+    else env.apply({ ...t.events[0][2], h: device.ih - KB }), env.fire('vv.resize')
+    vi.advanceTimersByTime(2000)
+    close(env)
+    vi.advanceTimersByTime(40)
+    const result = { phase: kb.state.phase, transition: String(el.style.transition) }
+    kb.destroy()
+    vi.useRealTimers()
+    return result
+  }
+  // PIXEL has Chrome's VirtualKeyboard API (exact path); IPHONE has none (measured path, like Safari and Firefox).
+  const back = (device: typeof PIXEL) => (env: ReturnType<typeof fakeWindow>) => {
+    const s = { iw: device.iw, ih: device.ih, w: device.iw, h: device.ih, top: 0, scale: 1 }
+    if (device.vk) env.apply({ ...s, kb: 0, ov: true }), env.fire('geometrychange')
+    else env.apply(s), env.fire('vv.resize')
+  }
+
+  it('Back with the exact API (reported as the keyboard starts to close): down at once, sliding in step', () => {
+    expect(closeWith(PIXEL, back(PIXEL))).toMatchObject({ phase: 'closed', transition: expect.stringContaining('.25s') })
+  })
+
+  it('Back on the measured path (reported once the keyboard is gone): down at once, catching up quickly', () => {
+    expect(closeWith(IPHONE, back(IPHONE))).toMatchObject({ phase: 'closed', transition: expect.stringContaining('.12s') })
+  })
+
+  it('tapping outside (known before the keyboard moves): slides down in step with it', () => {
+    const tapOut = (env: ReturnType<typeof fakeWindow>) => {
+      env.doc.activeElement = null
+      env.fire('focusout', TEXT)
+    }
+    expect(closeWith(IPHONE, tapOut)).toMatchObject({ phase: 'closed', transition: expect.stringContaining('.25s') })
   })
 })
 

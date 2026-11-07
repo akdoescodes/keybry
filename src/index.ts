@@ -69,7 +69,9 @@ interface VirtualKeyboard extends EventTarget {
   boundingRect: DOMRect
 }
 
-type Inner = (state: KeyboardState, animate?: boolean) => void
+/** 0: jump. 1: slide in step with a keyboard that starts moving now. 2: catch up quickly with one that already has. */
+type Motion = 0 | 1 | 2
+type Inner = (state: KeyboardState, motion?: Motion) => void
 
 const { max, min, round } = Math
 
@@ -78,12 +80,21 @@ const VAR = '--keyboard-height'
 const STORE = 'keybry'
 /** A keyboard costs far more height than browser toolbars collapsing or expanding. */
 const MIN = 120
-/** After focus leaves a field, wait this long for another field to take it before closing. */
-const BLUR = 100
+/**
+ * After focus leaves a field, wait this long (two frames) for another field to take it before closing.
+ * Moving between fields, and an app refocusing in the same task or a timeout, all land within it.
+ */
+const BLUR = 32
 /** A measurement below the prediction must hold this long before the bar corrects down to it. */
 const CORRECT = 100
+/**
+ * A keyboard going away this soon after focus moved may come right back for the new field, so the bar
+ * waits `settle` before following. Later than that (the Android Back button, the keyboard's own hide
+ * key), it is really closing and the bar goes down with it.
+ */
+const DIP = 500
 /** Close to the curve the iOS keyboard slides with. */
-const EASE = 'transform .25s cubic-bezier(.38,.7,.125,1)'
+const CURVE = ' cubic-bezier(.38,.7,.125,1)'
 /**
  * The built-in table: a first-time guess as a share of the screen height, for
  * [phone portrait, phone landscape, tablet portrait, tablet landscape].
@@ -140,6 +151,7 @@ export function createKeyboard({
   const later = win.setTimeout.bind(win)
   const cancel = win.clearTimeout.bind(win)
   const raf = win.requestAnimationFrame.bind(win)
+  const now = Date.now // read here, not at import, so a test's fake clock is the one used
   const appOverlay = !!vk && vk.overlaysContent
 
   // Saved heights, keyed by keyboard kind, orientation and screen size. localStorage first;
@@ -166,6 +178,8 @@ export function createKeyboard({
   let frame = 0
   /** When the current prediction started, and whether it was given up on before a keyboard came. */
   let predictedAt = 0
+  /** When focus last left a field (moving between fields always passes through here). */
+  let moved = 0
   let gaveUp = false
   let waitTimer: any
   let settleTimer: any
@@ -236,14 +250,14 @@ export function createKeyboard({
     }
   }
 
-  const commit = (next: KeyboardState, animate: boolean | undefined, keyboard: number) => {
+  const commit = (next: KeyboardState, motion: Motion, keyboard: number) => {
     lastKb = keyboard
     if (next.height == state.height && next.phase == state.phase && next.source == state.source) return
     // Save real heights, not iOS panning the page while the keyboard sits still.
-    if (animate && kind && next.phase == 'open') learn(next.height)
+    if (motion && kind && next.phase == 'open') learn(next.height)
     state = next
     style.setProperty(VAR, next.height + 'px')
-    listeners.forEach((fn) => fn(next, animate))
+    listeners.forEach((fn) => fn(next, motion))
   }
 
   /** Decides which number to trust, then moves now or after `settle`. */
@@ -256,7 +270,7 @@ export function createKeyboard({
       // A keyboard came after we gave up on it: it is just slow here. Wait longer from now on.
       // (A strip shorter than a keyboard may come first; it doesn't settle the question.)
       if (gaveUp && m.kb > MIN) {
-        save('wait', min(3000, round((Date.now() - predictedAt) * 1.5)))
+        save('wait', min(3000, round((now() - predictedAt) * 1.5)))
         gaveUp = false
       }
       predicted = 0
@@ -270,17 +284,29 @@ export function createKeyboard({
     // while open are the browser scrolling or its toolbar sliding (Firefox hides the toolbar and
     // scrolls the visible area under an open keyboard; iOS pans the page), never worth waiting for.
     const animate = next.phase != state.phase || m.turned || (exact() && m.kb != lastKb)
+    // How to move. The exact API reports as the keyboard starts to move, and focus and blur come
+    // before it moves, so those slide in step with it. A measurement on the other path arrives once
+    // the keyboard has finished moving (Firefox: ~0.3 s after closing starts), so catch up quickly.
+    const motion: Motion = animate ? (!exact() && kind && next.phase != 'opening' ? 2 : 1) : 0
     // Growing applies at once so nothing is ever covered, and so do those instant changes and closing
     // after focus left. Opening, closing or resizing while a field is focused waits for the numbers
     // to stop changing:
     // - while opening, the browser may be reporting every frame of the keyboard sliding in, and
     //   following that would drag the bar down from the prediction and back up;
-    // - once open, it may be the dip of the keyboard closing and reopening between two fields.
+    // - right after focus moved, it may be the dip of the keyboard closing and reopening for the new
+    //   field. With focus unchanged for longer (Android Back, the keyboard's hide key) it is really
+    //   closing, so the bar goes down at once.
     // An instant change right after innerHeight jumped waits for the matching visible height too.
-    if ((!animate && !m.jumped) || next.height >= state.height || m.turned || !kind) {
-      commit(next, animate, m.kb)
+    if (
+      (!animate && !m.jumped) ||
+      next.height >= state.height ||
+      m.turned ||
+      !kind ||
+      (animate && state.phase != 'opening' && now() - moved > DIP)
+    ) {
+      commit(next, motion, m.kb)
     } else {
-      settleTimer = later(() => commit(next, animate, m.kb), state.phase == 'opening' || !animate ? CORRECT : settle)
+      settleTimer = later(() => commit(next, motion, m.kb), state.phase == 'opening' || !animate ? CORRECT : settle)
     }
   }
 
@@ -303,7 +329,7 @@ export function createKeyboard({
         id in saved ? +saved[id] : exact() ? 0 : round((land ? a : b) * GUESS[(a >= 600 ? 2 : 0) + +land])
       if (p > 0) {
         predicted = p
-        predictedAt = Date.now()
+        predictedAt = now()
         gaveUp = false
         cancel(waitTimer)
         waitTimer = later(
@@ -325,6 +351,7 @@ export function createKeyboard({
   }
 
   const blur = () => {
+    moved = now()
     cancel(blurTimer)
     blurTimer = later(() => {
       kind = kindOf(active())
@@ -359,8 +386,8 @@ export function createKeyboard({
   kb.dock = (el) => {
     const s = el.style
     let docked = true
-    const apply: Inner = (st, animate) => {
-      s.transition = animate ? EASE : 'none'
+    const apply: Inner = (st, motion) => {
+      s.transition = motion ? 'transform .' + (motion > 1 ? 12 : 25) + 's' + CURVE : 'none'
       s.transform = st.height ? `translateY(${-st.height}px)` : ''
     }
     s.willChange = 'transform'

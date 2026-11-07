@@ -24,9 +24,11 @@ The whole engine is one closure in `src/index.ts`. Viewport events are coalesced
 Moving down because the keyboard is opening or closing while a field is focused waits for the numbers to stop changing:
 
 - while opening: 100 ms (`CORRECT`). The browser may be reporting every frame of the keyboard sliding in. Following that would drag the bar down from the prediction and back up.
-- once open: `settle`, 300 ms by default. Switching fields can close and reopen the keyboard, and following the dip makes the bar bounce.
+- once open, within half a second (`DIP`) of focus moving: `settle`, 300 ms by default. Switching fields can close and reopen the keyboard, and following that dip makes the bar bounce. Later than that, nothing is waited for: the keyboard is really closing (the Android Back button, the keyboard's own hide key, which keep focus in the field). Waiting there made the bar hang in the air for 0.3 s after the keyboard had gone.
 
-Focus leaving a field closes after 100 ms (`BLUR`), unless another field takes focus first. The correction is not clamped at 0: scrolled to the end, Firefox lets the visible area reach up to its toolbar's height past the bottom a fixed bar sits at, so the bar has to move down.
+Focus leaving a field closes after 32 ms (`BLUR`, two frames), unless another field takes focus first. Moving between fields, and an app refocusing in the same task or in a timeout, all land within it.
+
+**How it moves.** Three speeds. Focus, blur and the exact API all come as the keyboard starts to move, so those moves slide in step with it (0.25 s). On the measured path the browser reports after the keyboard has finished moving (Firefox: about 0.3 s after a close starts), so there is nothing left to be in step with: the bar catches up in 0.12 s. Everything else (scrolling, toolbars) jumps instantly. The correction is not clamped at 0: scrolled to the end, Firefox lets the visible area reach up to its toolbar's height past the bottom a fixed bar sits at, so the bar has to move down.
 
 **Prediction.** In order:
 
@@ -61,5 +63,5 @@ A prediction that sees no keyboard within `wait` (1000 ms; Firefox reports the k
 - Does iOS Safari report the keyboard every frame, or only at the end? Either way is handled. Which one decides how visible the first-time correction is.
 - Is 1000 ms the right starting `wait` on real phones? It grows by itself on slow devices; real Firefox traces will show how much margin it leaves.
 - With its toolbar hidden, Firefox draws bottom-fixed elements away from where it reports, so the bar can slip under the keyboard while a whole-page scroll keeps the toolbar hidden. The README recommends scrolling only the message list, which avoids it. Is there a reading that reveals the offset?
-- Is 100 ms the right `BLUR`? Apps that blur and refocus over a longer gap would see a small bounce.
+- Is 32 ms the right `BLUR`? An app that blurs and refocuses over a longer gap would see a small bounce.
 - How much does iOS pan the page when a docked input at the bottom gets focus, and how close is the saved height for the next time?
