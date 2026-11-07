@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <title>keyboard-dock: keep your chat bar on top of the mobile keyboard</title>
+    <meta
+      name="description"
+      content="A 1.7 KB library that moves chat bars with the mobile keyboard. Open this page on your phone and tap the message box."
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="top">
+      <div class="title">
+        <a class="brand" href="https://github.com/akdoescodes/keyboard-dock">keyboard-dock</a>
+        <button
+          id="status"
+          class="status"
+          type="button"
+          data-phase="closed"
+          aria-expanded="false"
+          aria-controls="details"
+          title="What this browser reports"
+        >
+          closed · 0px
+        </button>
+      </div>
+      <button id="test" class="test" type="button">Run the test</button>
+    </header>
+
+    <main id="feed" class="feed">
+      <p class="bubble them">Open this page on your phone, then tap the message box at the bottom.</p>
+      <p class="bubble them">
+        The bar moves <em>with</em> the keyboard, not after it. It guesses the keyboard height the moment
+        you tap, then measures the real one and saves it for next time.
+      </p>
+      <p class="bubble them">
+        The pill at the top shows what it knows: <b>phase</b> · <b>height</b> · <b>where the number came from</b>
+        (predicted, measured or exact). Tap it to see how this browser does it.
+      </p>
+      <p class="bubble them">
+        Close the keyboard and tap the box again. The second time there is nothing to correct.
+      </p>
+      <p class="bubble them">
+        Got two minutes? <b>Run the test</b> at the top. It records what your browser reports and turns it into a
+        test case, so the next release works on your phone too.
+      </p>
+      <p class="bubble them desktop-only">
+        On a computer? Open <a id="here" href="./">this page</a> on a phone. Nothing moves on a desktop, because
+        there is no on-screen keyboard.
+      </p>
+    </main>
+
+    <form id="composer" class="composer" autocomplete="off">
+      <div class="kinds" role="radiogroup" aria-label="Keyboard">
+        <button type="button" role="radio" aria-checked="true" data-kind="text">Text</button>
+        <button type="button" role="radio" aria-checked="false" data-kind="number">Number</button>
+        <button type="button" role="radio" aria-checked="false" data-kind="email">Email</button>
+        <button type="button" role="radio" aria-checked="false" data-kind="tel">Phone</button>
+      </div>
+      <div class="row">
+        <input id="message" type="text" placeholder="Message" aria-label="Message" enterkeyhint="send" />
+        <button id="send" class="send" type="submit" aria-label="Send">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <path fill="currentColor" d="M3.4 20.4 21 12 3.4 3.6l-.1 6.5L15 12l-11.7 1.9z" />
+          </svg>
+        </button>
+      </div>
+    </form>
+
+    <section id="guide" class="guide" hidden aria-live="polite">
+      <div class="guide-head">
+        <span id="step-count" class="step-count"></span>
+        <button id="guide-close" class="link" type="button">Close</button>
+      </div>
+      <p id="step-text" class="step-text"></p>
+      <div id="ask" class="ask" hidden>
+        <p id="ask-text"></p>
+        <div class="answers">
+          <button type="button" data-answer="yes">Yes</button>
+          <button type="button" data-answer="no">No</button>
+          <button type="button" data-answer="skip" class="link">Skip</button>
+        </div>
+      </div>
+      <div id="done" class="done" hidden>
+        <p>Thank you! Send the trace so this phone becomes a test case:</p>
+        <div class="answers">
+          <button id="share" type="button" hidden>Share trace</button>
+          <button id="download" type="button">Download trace</button>
+          <a id="issue" class="button" target="_blank" rel="noopener">Open a GitHub issue</a>
+        </div>
+        <p class="small">
+          The issue form opens with your answers filled in. Attach the downloaded file to it. The trace holds
+          viewport sizes, event timings and your browser's user agent, and nothing you typed.
+        </p>
+      </div>
+    </section>
+
+    <section id="details" class="guide" hidden>
+      <div class="guide-head">
+        <span class="step-count">What this browser reports</span>
+        <button id="details-close" class="link" type="button">Close</button>
+      </div>
+      <dl id="facts" class="facts"></dl>
+      <div class="answers">
+        <button id="reset" type="button">Reset saved heights</button>
+      </div>
+      <p class="small">Reset to test the very first open again (the guess). The page reloads.</p>
+    </section>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

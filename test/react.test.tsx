@@ -1,0 +1,44 @@
+// @vitest-environment happy-dom
+import { act } from 'react'
+import { createRoot } from 'react-dom/client'
+import { afterEach, expect, it } from 'vitest'
+import { KeyboardDock, useKeyboard } from '../src/react'
+
+;(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true
+
+const mount = (ui: React.ReactNode) => {
+  const host = document.createElement('div')
+  document.body.append(host)
+  const root = createRoot(host)
+  act(() => root.render(ui))
+  return { host, unmount: () => act(() => root.unmount()) }
+}
+
+afterEach(() => document.body.replaceChildren())
+
+it('<KeyboardDock> docks its element and undocks on unmount', () => {
+  const { host, unmount } = mount(
+    <KeyboardDock as="footer" className="bar">
+      hi
+    </KeyboardDock>,
+  )
+  const el = host.querySelector('footer')!
+  expect(el.className).toBe('bar')
+  expect(el.style.willChange).toBe('transform')
+  expect(document.documentElement.style.getPropertyValue('--keyboard-height')).toBe('0px')
+  unmount()
+  expect(el.style.willChange).toBe('')
+})
+
+it('useKeyboard() reads the state, with or without a selector', () => {
+  let full: unknown
+  let open: unknown
+  function Probe() {
+    full = useKeyboard()
+    open = useKeyboard((s) => s.open)
+    return null
+  }
+  mount(<Probe />)
+  expect(full).toMatchObject({ open: false, height: 0, phase: 'closed' })
+  expect(open).toBe(false)
+})

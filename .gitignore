@@ -1,0 +1,9 @@
+node_modules/
+dist/
+demo/lib/
+_site/
+*.log
+.DS_Store
+
+# Local testing tools and their output (screenshots, tunnels, emulator runs). Not part of the package.
+lab/

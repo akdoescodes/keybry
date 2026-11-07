@@ -1,0 +1,310 @@
+:root {
+  --bg: #f6f6f8;
+  --surface: #ffffff;
+  --text: #16161a;
+  --muted: #6b6b76;
+  --line: #e3e3e8;
+  --accent: #2f6bff;
+  --accent-text: #ffffff;
+  --amber: #b26a00;
+  --green: #11804a;
+  font: 16px/1.45 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-text-size-adjust: 100%;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f0f12;
+    --surface: #1b1b20;
+    --text: #f1f1f4;
+    --muted: #9a9aa6;
+    --line: #2c2c33;
+    --accent: #5b8cff;
+    --amber: #f0a43a;
+    --green: #3ccf86;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+}
+
+button,
+input,
+.button {
+  font: inherit;
+  color: inherit;
+}
+
+button,
+.button {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 6px 14px;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.link {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  padding: 6px 8px;
+}
+
+/* Header */
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: calc(10px + env(safe-area-inset-top)) 14px 10px;
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  font-weight: 700;
+  white-space: nowrap;
+  color: inherit;
+  text-decoration: none;
+  letter-spacing: -0.01em;
+}
+
+.title {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  min-width: 0;
+  margin-right: auto;
+}
+
+.status {
+  max-width: 100%;
+  font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  white-space: nowrap;
+  /* Shrink rather than widen the page: overflow makes mobile browsers widen the layout viewport. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status::after {
+  content: ' ▾';
+}
+
+.status[data-phase='opening'] {
+  color: var(--amber);
+  border-color: currentColor;
+}
+
+.status[data-phase='open'] {
+  color: var(--green);
+  border-color: currentColor;
+}
+
+.test {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: transparent;
+}
+
+/* Messages. The bottom padding grows with the keyboard so the last message stays visible. */
+.feed {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 16px 14px calc(var(--composer-height, 120px) + var(--keyboard-height, 0px) + 16px);
+}
+
+.bubble {
+  margin: 0;
+  max-width: 82%;
+  padding: 10px 14px;
+  border-radius: 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-bottom-left-radius: 6px;
+}
+
+.bubble.me {
+  align-self: flex-end;
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: transparent;
+  border-radius: 18px;
+  border-bottom-right-radius: 6px;
+}
+
+.bubble a {
+  color: var(--accent);
+}
+
+@media (pointer: coarse) {
+  .desktop-only {
+    display: none;
+  }
+}
+
+/* The docked composer: anchored to the bottom, moved by keyboard-dock with a transform. */
+.composer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  display: grid;
+  gap: 8px;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  background: var(--bg);
+  border-top: 1px solid var(--line);
+}
+
+/* The home indicator is under the keyboard while it's open, so the safe-area padding isn't needed. */
+html[data-keyboard='open'] .composer {
+  padding-bottom: 8px;
+}
+
+.kinds {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.kinds button {
+  font-size: 13px;
+  padding: 4px 12px;
+  color: var(--muted);
+}
+
+.kinds button[aria-checked='true'] {
+  color: var(--text);
+  border-color: var(--text);
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.row input {
+  flex: 1;
+  min-width: 0;
+  /* 16px stops iOS from zooming the page when the field is focused. */
+  font-size: 16px;
+  padding: 10px 16px;
+  border-radius: 22px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.send {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: transparent;
+}
+
+/* Guided test card */
+.guide {
+  position: fixed;
+  z-index: 4;
+  top: calc(64px + env(safe-area-inset-top));
+  left: 12px;
+  right: 12px;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 40px rgb(0 0 0 / 0.18);
+}
+
+.guide-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.step-count {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.step-text {
+  margin: 6px 0 0;
+  font-weight: 600;
+}
+
+.ask p,
+.done p {
+  margin: 10px 0 8px;
+}
+
+.answers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.answers [data-answer='yes'],
+#download {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: transparent;
+}
+
+/* Details panel */
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 12px;
+  margin: 10px 0 12px;
+  font-size: 14px;
+}
+
+.facts dt {
+  color: var(--muted);
+}
+
+.facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.small {
+  font-size: 13px;
+  color: var(--muted);
+}

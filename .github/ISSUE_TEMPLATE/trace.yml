@@ -1,0 +1,33 @@
+name: Device trace
+description: Send a recording from the test page, so your phone becomes a test case.
+title: 'Trace: '
+labels: [trace]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing! If you came from the [test page](https://akdoescodes.github.io/keyboard-dock/), the first two boxes are already filled in.
+  - type: textarea
+    id: device
+    attributes:
+      label: Device and browser
+      description: Phone or tablet, OS version, browser, and the keyboard app if it isn't the default.
+    validations:
+      required: true
+  - type: textarea
+    id: answers
+    attributes:
+      label: What you saw
+      description: Your answers from the guided test.
+  - type: textarea
+    id: trace
+    attributes:
+      label: Trace file
+      description: Drag the downloaded `trace-….json` file into this box.
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: For example, a third-party keyboard, a hardware keyboard, split screen, or a screen recording.
