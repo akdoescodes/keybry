@@ -6,6 +6,12 @@ import { Dock, useKeyboard } from '../src/react'
 
 ;(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true
 
+// happy-dom has no visualViewport, which every real browser has had since 2019 (without it keybry
+// stays inactive, like on the server). A still one is enough here.
+Object.defineProperty(window, 'visualViewport', {
+  value: Object.assign(new EventTarget(), { width: 390, height: 664, offsetTop: 0, scale: 1 }),
+})
+
 const mount = (ui: React.ReactNode) => {
   const host = document.createElement('div')
   document.body.append(host)

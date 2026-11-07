@@ -207,7 +207,7 @@ describe('no on-screen keyboard', () => {
     const run = () => replay(trace(IPAD).at(100, 'focusin', {}, TEXT).end(2000), { storage })
     const first = run()
     expect(at(first, 120).phase).toBe('opening')
-    expect(at(first, 100 + 500 + 150)).toMatchObject({ phase: 'closed', height: 0 })
+    expect(at(first, 100 + 1000 + 150)).toMatchObject({ phase: 'closed', height: 0 })
     const second = run()
     expect(second.states).toHaveLength(1) // nothing ever moved
   })
@@ -220,7 +220,7 @@ describe('no on-screen keyboard', () => {
       replay(trace(IPAD).at(100, 'focusin', {}, TEXT).keyboard(150, 55).at(3000, 'focusout').end(4000), { storage })
     const first = run()
     expect(at(first, 300).phase).toBe('opening') // a 55px strip doesn't cancel the prediction early
-    expect(at(first, 1000)).toMatchObject({ phase: 'open', height: 55 })
+    expect(at(first, 1300)).toMatchObject({ phase: 'open', height: 55 })
     expect(longestCovered(first)).toBe(0)
     const second = run()
     expect(at(second, 120)).toMatchObject({ height: 55 }) // learned: straight to the strip
@@ -233,12 +233,12 @@ describe('no on-screen keyboard', () => {
     // time, the bar gives up and comes back down; after that it should wait long enough.
     const storage = new Map<string, string>()
     const slow = () =>
-      replay(trace(PIXEL).at(100, 'focusin', {}, TEXT).keyboard(1000, KB).at(3000, 'focusout').end(4000), {
+      replay(trace(PIXEL).at(100, 'focusin', {}, TEXT).keyboard(1700, KB).at(3500, 'focusout').end(4500), {
         storage,
       })
     const first = slow()
-    expect(at(first, 700).phase).toBe('closed') // gave up after 500 ms
-    expect(at(first, 1100)).toMatchObject({ phase: 'open', height: KB })
+    expect(at(first, 1250).phase).toBe('closed') // gave up after 1000 ms
+    expect(at(first, 1800)).toMatchObject({ phase: 'open', height: KB })
     const second = slow()
     const whileOpen = second.states.filter(([t]) => t > 100 && t < 2900).map(([, s]) => s.phase)
     expect(whileOpen).not.toContain('closed')
@@ -254,6 +254,83 @@ describe('no on-screen keyboard', () => {
       { storage },
     )
     expect(JSON.parse(storage.get('keybry')!).wait).toBeGreaterThan(500)
+  })
+
+  it('Firefox for Android: reports a fine pointer on a touch screen, and must still work', () => {
+    // Recorded on Firefox 159 (Android 16): matchMedia('(pointer: coarse)') is false while
+    // maxTouchPoints is 5. Trusting the media query left the bar under the keyboard.
+    const firefox = { ...PIXEL, ua: 'Firefox for Android (synthetic)', vk: false }
+    const t = trace(firefox).at(100, 'focusin', {}, TEXT).keyboard(400, 314).end(1500)
+    t.meta.coarse = false
+    t.meta.touch = 5
+    const r = replay(t)
+    expect(r.final).toMatchObject({ phase: 'open', height: 314 })
+    expect(longestCovered(r)).toBe(0)
+  })
+
+  it('Firefox for Android: scrolling with the keyboard open hides the toolbar; the bar must stay on the keyboard', () => {
+    // Real numbers from Firefox 159 on Android 16: scrolling hides the toolbar (innerHeight 807 -> 872)
+    // and scrolls the visible area (offsetTop 0 -> 170) under a keyboard that never changes. The bar
+    // used to float up to 164px above the keyboard for 900ms, waiting for a "shrinking keyboard" to settle.
+    const firefox = { ...PIXEL, screen: [414, 920] as [number, number], iw: 414, ih: 807, ua: 'Firefox (synthetic)', vk: false }
+    const b = trace(firefox).at(100, 'focusin', {}, TEXT).at(800, 'vv.resize', { h: 493 })
+    const scroll: [number, number, number, number][] = [
+      // [ms, innerHeight, visualViewport.height, offsetTop]
+      [2000, 807, 493, 5], [2013, 807, 514, 57], [2047, 807, 520, 56], [2062, 807, 533, 57],
+      [2137, 872, 557, 56], [2149, 872, 557, 58], [2213, 872, 557, 84], [2270, 872, 557, 101],
+      [2338, 872, 557, 123], [2413, 872, 557, 152], [2493, 872, 557, 164], [2577, 872, 557, 170],
+      // the toolbar comes back
+      [5340, 807, 544, 170], [5358, 807, 522, 170], [5399, 807, 500, 170], [5458, 807, 493, 170],
+    ]
+    for (const [ms, ih, h, top] of scroll) b.at(ms, ih == 872 && ms == 2137 ? 'resize' : 'vv.scroll', { ih, h, top })
+    const r = replay(b.end(6500))
+    // A frame after each report (that isn't overtaken by another one first), the bar is where the keyboard is.
+    scroll.forEach(([ms, ih, h, top], i) => {
+      if (!scroll[i + 1] || scroll[i + 1][0] - ms > 20) expect(at(r, ms + 20).height, `at ${ms}ms`).toBe(ih - h - top)
+    })
+    expect(r.final).toMatchObject({ phase: 'open', height: 807 - 493 - 170 })
+  })
+
+  it('Firefox for Android: the toolbar coming back reports innerHeight a frame before the visible height; no flicker', () => {
+    // Real numbers: innerHeight jumps 872 -> 807 while visualViewport.height still says 543.6, and
+    // only 28ms later becomes 496. Following the first report moved the bar 48px down and back up.
+    const firefox = { ...PIXEL, screen: [414, 920] as [number, number], iw: 414, ih: 807, ua: 'Firefox (synthetic)', vk: false }
+    const r = replay(
+      trace(firefox)
+        .at(100, 'focusin', {}, TEXT)
+        .at(800, 'vv.resize', { h: 493 })
+        .at(2000, 'resize', { ih: 872, h: 557, top: 138.4 }) // toolbar hidden, scrolled
+        .at(3000, 'resize', { ih: 807, h: 543.6 }) // toolbar back: innerHeight first...
+        .at(3006, 'vv.resize')
+        .at(3028, 'vv.resize', { h: 496 }) // ...the visible height a frame later
+        .end(4000),
+    )
+    const heights = r.states.filter(([t]) => t >= 3000).map(([, s]) => s.height)
+    expect(heights).not.toContain(Math.round(807 - 543.6 - 138.4)) // never the 125px glitch
+    expect(at(r, 3060).height).toBe(Math.round(807 - 496 - 138.4))
+  })
+
+  it('Firefox for Android: scrolled to the end, the visible area reaches past the page bottom; the bar moves down', () => {
+    // Real numbers: innerHeight 807, visible 493, offsetTop 378.7. The visible area ends 65px (Firefox's
+    // toolbar height) below where a bottom:0 bar sits, so a plain fixed bar floats 65px above the keyboard.
+    const firefox = { ...PIXEL, screen: [414, 920] as [number, number], iw: 414, ih: 807, ua: 'Firefox (synthetic)', vk: false }
+    const r = replay(
+      trace(firefox)
+        .at(100, 'focusin', {}, TEXT)
+        .at(800, 'vv.resize', { h: 493 })
+        .at(2000, 'vv.scroll', { top: 179.5 })
+        .at(3000, 'vv.scroll', { top: 378.7 })
+        .end(4000),
+    )
+    expect(at(r, 2020).height).toBe(Math.round(807 - 493 - 179.5))
+    expect(r.final).toMatchObject({ phase: 'open', height: -65 }) // 807 - 493 - 378.7, rounded
+  })
+
+  it('Firefox for Android: a keyboard that reports 750ms after focus does not make the bar bounce', () => {
+    const storage = new Map<string, string>([['keybry', JSON.stringify({ textP412x915: KB })]])
+    const r = replay(trace(PIXEL).at(100, 'focusin', {}, TEXT).keyboard(850, KB).end(2000), { storage })
+    expect(r.states.map(([, s]) => s.phase)).toEqual(['closed', 'opening', 'open'])
+    expect(reversals(r.states)).toBe(0)
   })
 
   it('desktop: focusing and resizing the window never opens', () => {

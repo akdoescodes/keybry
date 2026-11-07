@@ -52,7 +52,7 @@ export interface Options {
   /**
    * How long, in ms, to wait for an on-screen keyboard after a field is focused before deciding
    * there isn't one (a hardware keyboard, or the floating iPad keyboard).
-   * @default 500
+   * @default 1000
    */
   wait?: number
   /**
@@ -108,7 +108,7 @@ const CLOSED = make(0, 'closed', 'measured')
  */
 export function createKeyboard({
   win = typeof window != 'undefined' ? window : undefined,
-  wait = 500,
+  wait = 1000,
   settle = 300,
 }: Options = {}): Keyboard {
   let state = CLOSED
@@ -127,13 +127,16 @@ export function createKeyboard({
     destroy() {},
   }
   // Server rendering: no window, so stay closed and do nothing.
-  if (!win) return kb
+  // Also without visualViewport (browsers before 2019): nothing to measure with, so nothing moves.
+  if (!win || !win.visualViewport) return kb
 
   const doc = win.document
   const style = doc.documentElement.style
   const vv = win.visualViewport
   const vk = (win.navigator as { virtualKeyboard?: VirtualKeyboard }).virtualKeyboard
-  const coarse = win.matchMedia('(pointer:coarse)')
+  // A touch screen, so an on-screen keyboard is possible. Not matchMedia('(pointer: coarse)'): Firefox
+  // for Android reports a fine pointer on phones (seen on 159), which left the bar under the keyboard.
+  const touch = win.navigator.maxTouchPoints > 0
   const later = win.setTimeout.bind(win)
   const cancel = win.clearTimeout.bind(win)
   const raf = win.requestAnimationFrame.bind(win)
@@ -158,6 +161,7 @@ export function createKeyboard({
   let docks = 0
   let baseW = 0
   let baseH = 0
+  let lastIh = 0
   let lastKb = 0
   let frame = 0
   /** When the current prediction started, and whether it was given up on before a keyboard came. */
@@ -194,18 +198,22 @@ export function createKeyboard({
 
   const learn = (height: number) => save(keyFor(kind as Kind), height)
 
-  const exact = () => !!vk && vk.overlaysContent
+  const exact = () => vk?.overlaysContent
 
   /** Reads the browser. `kb` is the keyboard's own height; `inset` is how much of the page it covers. */
-  const measure = () => {
+  const measure = (): { open: boolean; inset: number; kb: number; turned?: boolean; jumped?: boolean } => {
     if (exact()) {
       // With overlaysContent nothing resizes: the keyboard simply covers its own height.
       const h = round(vk!.boundingRect.height)
-      return { open: h > 0, inset: h, kb: h, turned: false }
+      return { open: h > 0, inset: h, kb: h }
     }
     const ih = win.innerHeight
-    const w = round(vv ? vv.width : win.innerWidth)
-    const h = vv ? vv.height : ih
+    const w = round(vv.width)
+    const h = vv.height
+    // Firefox reports a new innerHeight (its toolbar sliding in or out) a frame before the visible
+    // height that goes with it. Until the second number arrives, the first can't be trusted.
+    const jumped = ih != lastIh
+    lastIh = ih
     // The baseline is the tallest viewport seen at this width, not innerHeight: Safari and Chrome
     // keep innerHeight fixed while the keyboard is up, but Brave and Firefox shrink it too.
     // Rotation or a split-screen resize changes the width, which starts a fresh baseline.
@@ -214,18 +222,21 @@ export function createKeyboard({
     baseW = w
     const keyboard = round(baseH - h)
     // iOS pans the visual viewport (offsetTop) while the keyboard is up; fixed elements don't move with it.
-    const inset = max(0, round(ih - h - (vv ? vv.offsetTop : 0)))
+    // Not clamped at 0: scrolled to the end, Firefox lets the visible area reach up to its toolbar's
+    // height past the bottom a fixed bar sits at, and the bar has to move down to meet the keyboard.
+    const inset = round(ih - h - vv.offsetTop)
     return {
       // A strip shorter than any keyboard (the iPad shortcut bar with a hardware keyboard, Chrome's
       // autofill bar) still covers a focused field's bar, so it counts once no prediction is pending.
-      open: coarse.matches && (keyboard > MIN || (!!kind && !predicted && inset > 0)),
+      open: touch && (keyboard > MIN || (!!kind && !predicted && inset > 0)),
       inset,
       kb: keyboard,
       turned,
+      jumped,
     }
   }
 
-  const commit = (next: KeyboardState, animate: boolean, keyboard: number) => {
+  const commit = (next: KeyboardState, animate: boolean | undefined, keyboard: number) => {
     lastKb = keyboard
     if (next.height == state.height && next.phase == state.phase && next.source == state.source) return
     // Save real heights, not iOS panning the page while the keyboard sits still.
@@ -254,17 +265,22 @@ export function createKeyboard({
     } else if (kind && predicted) {
       next = make(predicted, 'opening', 'predicted')
     }
-    // Only real keyboard changes animate. iOS panning the page (same keyboard, new offsetTop) tracks instantly.
-    const animate = next.phase != state.phase || m.kb != lastKb
-    // Growing applies at once so nothing is ever covered, and so do panning and closing after focus
-    // left. Anything smaller while a field is focused waits for the numbers to stop changing:
+    // Animate when the keyboard opens or closes, and when the exact API reports a new size (it does so
+    // as the keyboard starts to move). Anything else tracks instantly: on the measured path, changes
+    // while open are the browser scrolling or its toolbar sliding (Firefox hides the toolbar and
+    // scrolls the visible area under an open keyboard; iOS pans the page), never worth waiting for.
+    const animate = next.phase != state.phase || m.turned || (exact() && m.kb != lastKb)
+    // Growing applies at once so nothing is ever covered, and so do those instant changes and closing
+    // after focus left. Opening, closing or resizing while a field is focused waits for the numbers
+    // to stop changing:
     // - while opening, the browser may be reporting every frame of the keyboard sliding in, and
     //   following that would drag the bar down from the prediction and back up;
     // - once open, it may be the dip of the keyboard closing and reopening between two fields.
-    if (!animate || next.height >= state.height || m.turned || !kind) {
+    // An instant change right after innerHeight jumped waits for the matching visible height too.
+    if ((!animate && !m.jumped) || next.height >= state.height || m.turned || !kind) {
       commit(next, animate, m.kb)
     } else {
-      settleTimer = later(() => commit(next, animate, m.kb), state.phase == 'opening' ? CORRECT : settle)
+      settleTimer = later(() => commit(next, animate, m.kb), state.phase == 'opening' || !animate ? CORRECT : settle)
     }
   }
 
@@ -278,7 +294,7 @@ export function createKeyboard({
     if (!k) return
     cancel(blurTimer)
     kind = k
-    if (!state.open && coarse.matches) {
+    if (!state.open && touch) {
       const id = keyFor(k)
       const [a, b, land] = screen()
       // 1. The height saved last time on this device. 2. When the exact API is on, it answers

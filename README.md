@@ -65,6 +65,30 @@ dock(document.querySelector('.composer')) // returns an undock() function
 }
 ```
 
+### Layout tip: scroll the message list, not the page
+
+When the whole page scrolls under an open keyboard, the browser moves things itself. Chrome and Safari slide the visible area, and Firefox also hides its toolbar. keybry follows all of that, but Firefox draws fixed elements up to a toolbar's height away from where it reports while its toolbar is hidden, and no script can see that. If only the message list scrolls, none of it happens:
+
+```css
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  margin: 0;
+}
+.messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: calc(80px + var(--keyboard-height, 0px)); /* room for the composer */
+}
+```
+
 ### CSS only
 
 `--keyboard-height` is always set on `<html>`, so you can move anything with it yourself:
@@ -126,7 +150,7 @@ kb.subscribe((s) => console.log(s.open, s.height, s.phase, s.source))
 | Field    | Meaning                                                                                                                                 |
 | -------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `open`   | `true` while a keyboard is up, or predicted to be coming up.                                                                            |
-| `height` | Pixels of the page the keyboard covers, so how far to move bottom-anchored UI. `0` in browsers that shrink the page themselves (Firefox, Brave). |
+| `height` | Pixels of the page the keyboard covers, so how far to move bottom-anchored UI. `0` when the browser shrank the page itself (Brave does; Firefox sometimes does). Briefly negative in Firefox when its visible area reaches past the page bottom; moving by it is still right. |
 | `phase`  | `'closed'`, `'opening'` (predicted, not yet confirmed) or `'open'` (measured).                                                          |
 | `source` | `'predicted'`, `'measured'` (visual viewport) or `'exact'` (VirtualKeyboard API).                                                       |
 
@@ -139,7 +163,7 @@ import { keyboard, dock, createKeyboard } from 'keybry'
 - **`keyboard()`** returns the shared tracker for the page. It's created on first use.
 - **`dock(el)`** keeps `el` above the keyboard and returns `undock()`. It's shorthand for `keyboard().dock(el)`.
 - **`createKeyboard(options?)`** creates a separate tracker. You only need this for tests and custom timings:
-  - `wait` (default `500`): ms to wait for an on-screen keyboard before deciding there isn't one (hardware keyboard, floating iPad keyboard).
+  - `wait` (default `1000`): ms to wait for an on-screen keyboard before deciding there isn't one (hardware keyboard, floating iPad keyboard). It grows by itself on devices whose keyboard is slower than that.
   - `settle` (default `300`): ms a shrinking keyboard must hold before the UI follows it down. This is what stops the bounce.
   - `win`: the window to read. Tests pass a fake one.
 - A **`Keyboard`** has `state`, `subscribe(fn) → unsubscribe`, `dock(el) → undock` and `destroy()`.
@@ -161,6 +185,7 @@ From `keybry/recorder` (a separate import, not part of the core):
 - **`dock()` takes over the element's inline `transform`.** Put your own transforms on a wrapper.
 - **The first open on a device is a guess.** It's deliberately on the tall side, because a bar that starts a little high and settles looks fine, and a bar hidden behind the keyboard does not. From the second open, the saved height is used.
 - **Short strips count too.** The iPad shortcut bar shown with a hardware keyboard, or Chrome's autofill bar, is far shorter than a keyboard. The bar still sits on top of it.
+- **Firefox for Android** is supported on the measured path. It reports a fine pointer on phones with a stylus, so keybry detects touch with `navigator.maxTouchPoints`, not `(pointer: coarse)`. It also reports the keyboard later than Chrome, and hides its toolbar when the page scrolls (see the layout tip).
 - **Not handled yet:** pages that are pinch-zoomed.
 
 ## Help it work on your phone
