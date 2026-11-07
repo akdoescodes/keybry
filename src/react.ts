@@ -20,7 +20,7 @@ const useIsoLayoutEffect = typeof window != 'undefined' ? useLayoutEffect : useE
  *     const open = useKeyboard((s) => s.open)
  *
  * The selector must return a primitive or a stable value. For moving things, use
- * `<KeyboardDock>` or the `--keyboard-height` CSS variable instead; they never re-render.
+ * `<Dock>` or the `--keyboard-height` CSS variable instead; they never re-render.
  */
 export function useKeyboard(): KeyboardState
 export function useKeyboard<T>(select: (state: KeyboardState) => T): T
@@ -30,7 +30,7 @@ export function useKeyboard<T>(select?: (state: KeyboardState) => T): T | Keyboa
   return useSyncExternalStore(kb.subscribe, read, read)
 }
 
-export type KeyboardDockProps = HTMLAttributes<HTMLElement> & {
+export type DockProps = HTMLAttributes<HTMLElement> & {
   /** The element to render. @default 'div' */
   as?: ElementType
 }
@@ -39,7 +39,7 @@ export type KeyboardDockProps = HTMLAttributes<HTMLElement> & {
  * Keeps its contents above the on-screen keyboard. Moves with a GPU transform and never re-renders.
  * Position it at the bottom yourself, e.g. `style={{ position: 'fixed', bottom: 0, left: 0, right: 0 }}`.
  */
-export function KeyboardDock({ as = 'div', ...props }: KeyboardDockProps) {
+export function Dock({ as = 'div', ...props }: DockProps) {
   const ref = useRef<HTMLElement>(null)
   useIsoLayoutEffect(() => keyboard().dock(ref.current!), [])
   return createElement(as, { ...props, ref })

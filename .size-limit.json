@@ -11,9 +11,9 @@
     "limit": "1.65 kB"
   },
   {
-    "name": "react: <KeyboardDock> + useKeyboard() (core included, react excluded)",
+    "name": "react: <Dock> + useKeyboard() (core included, react excluded)",
     "path": "dist/react.js",
-    "import": "{ KeyboardDock, useKeyboard }",
+    "import": "{ Dock, useKeyboard }",
     "ignore": [
       "react"
     ],

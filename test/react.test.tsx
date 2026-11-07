@@ -2,7 +2,7 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it } from 'vitest'
-import { KeyboardDock, useKeyboard } from '../src/react'
+import { Dock, useKeyboard } from '../src/react'
 
 ;(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -16,11 +16,11 @@ const mount = (ui: React.ReactNode) => {
 
 afterEach(() => document.body.replaceChildren())
 
-it('<KeyboardDock> docks its element and undocks on unmount', () => {
+it('<Dock> docks its element and undocks on unmount', () => {
   const { host, unmount } = mount(
-    <KeyboardDock as="footer" className="bar">
+    <Dock as="footer" className="bar">
       hi
-    </KeyboardDock>,
+    </Dock>,
   )
   const el = host.querySelector('footer')!
   expect(el.className).toBe('bar')

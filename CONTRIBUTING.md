@@ -22,7 +22,7 @@ Testing on a real phone:
 ```
 src/index.ts      the engine: listen → predict → measure → correct → learn → move
 src/focus.ts      which keyboard a focused field will open
-src/react.ts      useKeyboard() and <KeyboardDock>
+src/react.ts      useKeyboard() and <Dock>
 src/recorder.ts   records traces (a separate import, not in the core)
 test/env.ts       the fake window that replays a trace through the engine
 test/scenarios.ts synthetic traces for known browser behaviours

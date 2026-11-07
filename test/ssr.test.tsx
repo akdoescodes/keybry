@@ -2,7 +2,7 @@
 import { renderToString } from 'react-dom/server'
 import { expect, it } from 'vitest'
 import { dock, keyboard } from '../src/index'
-import { KeyboardDock, useKeyboard } from '../src/react'
+import { Dock, useKeyboard } from '../src/react'
 
 it('core is inert on the server', () => {
   expect(typeof window).toBe('undefined')
@@ -16,9 +16,9 @@ it('React renders on the server', () => {
     return <b>{open ? 'open' : 'closed'}</b>
   }
   const html = renderToString(
-    <KeyboardDock className="bar">
+    <Dock className="bar">
       <Status />
-    </KeyboardDock>,
+    </Dock>,
   )
   expect(html).toBe('<div class="bar"><b>closed</b></div>')
 })

@@ -81,7 +81,7 @@ dock(document.querySelector('.composer')) // returns an undock() function
 ### React
 
 ```jsx
-import { KeyboardDock, useKeyboard } from 'keybry/react'
+import { Dock, useKeyboard } from 'keybry/react'
 
 function Chat() {
   const open = useKeyboard((s) => s.open) // re-renders only when `open` changes
@@ -89,15 +89,15 @@ function Chat() {
     <>
       <Messages />
       {!open && <BottomNav />}
-      <KeyboardDock className="composer">
+      <Dock className="composer">
         <ChatInput />
-      </KeyboardDock>
+      </Dock>
     </>
   )
 }
 ```
 
-`<KeyboardDock>` never re-renders as the keyboard moves. It takes any HTML attributes, plus `as` to pick the element (`<KeyboardDock as="footer">`).
+`<Dock>` never re-renders as the keyboard moves. It takes any HTML attributes, plus `as` to pick the element (`<Dock as="footer">`).
 
 ### Vue, Svelte, Solid, Angular
 
@@ -148,7 +148,7 @@ From `keybry/react`:
 
 - **`useKeyboard()`** returns the full state.
 - **`useKeyboard(select)`** returns a selected value and re-renders only when it changes.
-- **`<KeyboardDock as? ...props>`** renders a docked element.
+- **`<Dock as? ...props>`** renders a docked element.
 
 From `keybry/recorder` (a separate import, not part of the core):
 
