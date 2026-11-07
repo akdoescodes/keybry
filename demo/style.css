@@ -31,9 +31,20 @@
   box-sizing: border-box;
 }
 
+/* The chat layout: the page never scrolls, only the message list does. That keeps the browser's own
+   scrolling out of the way: when the whole page scrolls under an open keyboard, Firefox hides its
+   toolbar and slides the visible area around, and draws fixed elements away from where it reports. */
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   margin: 0;
-  min-height: 100dvh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
 }
 
 button,
@@ -68,8 +79,8 @@ button,
 
 /* Header */
 .top {
-  position: sticky;
-  top: 0;
+  flex: none;
+  position: relative;
   z-index: 3;
   display: flex;
   align-items: center;
@@ -134,12 +145,14 @@ button,
 
 /* Messages. The bottom padding grows with the keyboard so the last message stays visible. */
 .feed {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-width: 640px;
-  margin: 0 auto;
-  padding: 16px 14px calc(var(--composer-height, 120px) + var(--keyboard-height, 0px) + 16px);
+  padding: 16px max(14px, calc((100% - 640px) / 2)) calc(var(--composer-height, 120px) + var(--keyboard-height, 0px) + 16px);
 }
 
 .bubble {
@@ -165,10 +178,9 @@ button,
   color: var(--accent);
 }
 
-@media (pointer: coarse) {
-  .desktop-only {
-    display: none;
-  }
+/* Set from navigator.maxTouchPoints: Firefox for Android reports (pointer: fine) on phones. */
+html.touch .desktop-only {
+  display: none;
 }
 
 /* The docked composer: anchored to the bottom, moved by keybry with a transform. */

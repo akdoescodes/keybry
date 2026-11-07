@@ -12,6 +12,8 @@ const status = $('status')
 // The whole integration: one line.
 dock(composer)
 
+if (navigator.maxTouchPoints > 0) root.classList.add('touch')
+
 // Everything below is the demo and the guided test.
 const kb = keyboard()
 const recorder = record({ keyboard: kb })
@@ -19,7 +21,8 @@ const recorder = record({ keyboard: kb })
 // Keep the last message visible above the composer (the CSS adds --keyboard-height on top).
 new ResizeObserver(() => root.style.setProperty('--composer-height', composer.offsetHeight + 'px')).observe(composer)
 
-const toBottom = () => window.scrollTo({ top: document.body.scrollHeight })
+// Only the message list scrolls (see style.css), so that is what goes to the newest message.
+const toBottom = () => feed.scrollTo({ top: feed.scrollHeight })
 
 let wasOpen = false
 kb.subscribe((s) => {
@@ -224,14 +227,15 @@ function finish() {
   $('share').hidden = !navigator.canShare?.({ files: [file] })
 }
 
-$('download').addEventListener('click', () => {
+const downloadTrace = () => {
   const file = traceFile()
   const a = document.createElement('a')
   a.href = URL.createObjectURL(file)
   a.download = file.name
   a.click()
   setTimeout(() => URL.revokeObjectURL(a.href), 1000)
-})
+}
+$('download').addEventListener('click', downloadTrace)
 
 $('share').addEventListener('click', () => {
   const file = traceFile()
@@ -267,18 +271,29 @@ const facts = () => {
   const method =
     vk && vk.overlaysContent
       ? 'Exact: the browser reports the keyboard (VirtualKeyboard API)'
-      : matchMedia('(pointer:coarse)').matches
+      : navigator.maxTouchPoints > 0
         ? 'Measured from the visible area (visualViewport)'
         : 'None: no touch screen, so nothing moves'
   return [
     ['Browser', device()],
     ['Method', method],
+    ['Touch', `${navigator.maxTouchPoints} touch points, pointer reported as ${matchMedia('(pointer:coarse)').matches ? 'coarse' : 'fine'}`],
     ['HTTPS', isSecureContext ? 'Yes' : 'No (Chrome only gives exact numbers over HTTPS)'],
     ['Keyboard', s.phase == 'closed' ? 'closed' : `${s.phase} · ${s.height}px · ${s.source}`],
     [
       'Viewport',
-      `page ${innerWidth}×${innerHeight}, visible ${Math.round(vv.width)}×${Math.round(vv.height)}` +
+      `page ${innerWidth}×${innerHeight} (layout ${root.clientHeight}), visible ${Math.round(vv.width)}×${Math.round(vv.height)}` +
         (vv.offsetTop ? `, panned ${Math.round(vv.offsetTop)}px` : ''),
+    ],
+    [
+      // Where the bar's bottom edge is against the bottom of the visible area (the keyboard top).
+      'Bar',
+      (() => {
+        const bottom = composer.getBoundingClientRect().bottom
+        const visible = vv.offsetTop + vv.height
+        const gap = Math.round(visible - bottom)
+        return `bottom ${Math.round(bottom)}, visible bottom ${Math.round(visible)}: ${gap == 0 ? 'on the keyboard' : gap > 0 ? `${gap}px above it` : `${-gap}px behind it`}`
+      })(),
     ],
     ['Saved', heights.length ? heights.join('; ') : 'nothing yet: tap the message box'],
     ...(saved.wait ? [['Slow keyboard', `waits up to ${saved.wait} ms for it`]] : []),
@@ -316,7 +331,8 @@ visualViewport.addEventListener('resize', redraw)
 visualViewport.addEventListener('scroll', redraw)
 addEventListener('resize', redraw)
 
-for (const b of [status, $('details-close'), $('reset')]) {
+$('details-download').addEventListener('click', downloadTrace)
+for (const b of [status, $('details-close'), $('reset'), $('details-download')]) {
   b.addEventListener('pointerdown', (e) => e.preventDefault()) // checking details must not close the keyboard
 }
 status.addEventListener('click', () => showDetails(details.hidden))
