@@ -30,8 +30,7 @@ export function fakeWindow(meta: Trace['meta'], first: Sample, storage = new Map
   const vv: any = new EventTarget()
   const vk = meta.vk ? new FakeVirtualKeyboard() : undefined
   const css = new Map<string, string>()
-  /** What env(safe-area-max-inset-bottom) resolves to: the navigation bar Chrome on Android can draw under. */
-  const env = { safeAreaMaxInsetBottom: 0 }
+  const viewport = { content: 'width=device-width, initial-scale=1' }
   const doc = {
     activeElement: null as unknown,
     documentElement: {
@@ -39,9 +38,9 @@ export function fakeWindow(meta: Trace['meta'], first: Sample, storage = new Map
         setProperty: (k: string, v: string) => void css.set(k, v),
         removeProperty: (k: string) => void css.delete(k),
       },
-      append: () => {},
     },
-    createElement: () => ({ style: {} as Record<string, string>, remove: () => {} }),
+    // The page's viewport tag, which keybry extends while something is docked.
+    querySelector: (q: string) => (q == 'meta[name=viewport]' ? viewport : null),
   }
   Object.assign(win, {
     document: doc,
@@ -57,10 +56,6 @@ export function fakeWindow(meta: Trace['meta'], first: Sample, storage = new Map
       },
     },
     devicePixelRatio: meta.dpr,
-    // Only the probe keybry reads the navigation bar's height with.
-    getComputedStyle: (el: { style: Record<string, string> }) => ({
-      marginTop: /safe-area-max-inset-bottom/.test(el.style.margin ?? '') ? env.safeAreaMaxInsetBottom + 'px' : '0px',
-    }),
     matchMedia: (q: string) => ({ matches: q.includes('coarse') ? meta.coarse : false }),
     localStorage: {
       getItem: (k: string) => storage.get(k) ?? null,
@@ -105,7 +100,7 @@ export function fakeWindow(meta: Trace['meta'], first: Sample, storage = new Map
   }
 
   apply(first)
-  return { win: win as Window, vk, css, doc, storage, env, apply, fire, dispatch }
+  return { win: win as Window, vk, css, doc, storage, viewport, apply, fire, dispatch }
 }
 
 /** What a docked bar should be at: how far the keyboard really covers the page. */
@@ -131,8 +126,10 @@ export function replay(trace: Trace, options: Omit<Options, 'win'> & { storage?:
     const [, , first, focusedAtStart] = trace.events[0]
     const env = fakeWindow(trace.meta, first, options.storage)
     if (typeof focusedAtStart == 'object') env.doc.activeElement = element(focusedAtStart)
-    const kb = createKeyboard({ ...options, win: env.win })
+    // Recorded with overlaysContent on: replay it as a page that turned it on (keybry no longer does).
     const overlay = trace.events.some((e) => e[2].ov)
+    if (overlay) env.vk!.overlaysContent = true
+    const kb = createKeyboard({ ...options, win: env.win })
     if (overlay) kb.dock({ style: {} } as HTMLElement)
     const states: Replay['states'] = [[0, kb.state]]
     kb.subscribe((s) => states.push([Date.now(), s]))

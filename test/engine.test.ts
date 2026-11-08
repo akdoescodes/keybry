@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createKeyboard } from '../src/index'
 import { kindOf } from '../src/focus'
 import { element, fakeWindow, longestCovered, replay, reversals } from './env'
+import type { Sample } from '../src/recorder'
 import { BUTTON, DESKTOP, IPAD, IPHONE, NUMBER, OTHER, PIXEL, TEXT, trace } from './scenarios'
 
 const KB = 300 // Android keyboard in these scenarios
@@ -121,109 +122,73 @@ describe('Android Chrome, exact numbers from the VirtualKeyboard API', () => {
     expect(longestCovered(r)).toBeLessThanOrEqual(20) // one frame
   })
 
-  it('switches overlaysContent on only while something is docked, and restores it', () => {
-    vi.useFakeTimers()
-    const env = fakeWindow(trace(PIXEL).trace.meta, trace(PIXEL).trace.events[0][2])
+  it('a page that turned overlaysContent on itself gets the exact numbers, and keeps its value', () => {
+    vi.useFakeTimers({ now: 0 })
+    const t = trace(PIXEL).trace
+    const env = fakeWindow(t.meta, t.events[0][2])
+    env.vk!.overlaysContent = true
     const kb = createKeyboard({ win: env.win })
-    expect(env.vk!.overlaysContent).toBe(false)
-    const undockA = kb.dock({ style: {} } as HTMLElement)
-    const undockB = kb.dock({ style: {} } as HTMLElement)
-    expect(env.vk!.overlaysContent).toBe(true)
-    undockA()
-    undockA() // calling twice is harmless
-    expect(env.vk!.overlaysContent).toBe(true)
-    undockB()
-    expect(env.vk!.overlaysContent).toBe(false)
+    const undock = kb.dock({ style: {} } as HTMLElement)
+    expect(env.viewport.content).toBe('width=device-width, initial-scale=1') // the page chose overlaysContent
+    env.doc.activeElement = element(TEXT)
+    env.fire('focusin', TEXT)
+    env.apply({ ...t.events[0][2], kb: KB, ov: true })
+    env.fire('geometrychange')
+    vi.advanceTimersByTime(100)
+    expect(kb.state).toMatchObject({ phase: 'open', height: KB, source: 'exact' })
+    undock()
     kb.destroy()
+    expect(env.vk!.overlaysContent).toBe(true)
     vi.useRealTimers()
   })
 })
 
-describe('Android Chrome: the page does not end where Chrome measures the keyboard from', () => {
-  // Chrome reports the keyboard's height minus the navigation bar's, as if every page ended at the top of the
-  // navigation bar. The bar's height comes from env(safe-area-max-inset-bottom), the page's place on the screen
-  // from the tap that opens the keyboard.
-
-  /** Opens a keyboard Chrome reports as `kb` px on the exact path; returns how far the bar moved. */
-  const open = ({ ih, top, nav = 24, kb = 312, tap = true }: { ih: number; top: number; nav?: number; kb?: number; tap?: boolean }) => {
-    vi.useFakeTimers({ now: 0 })
-    const t = trace({ ...PIXEL, ih }).trace // a 915px tall screen
-    const env = fakeWindow(t.meta, t.events[0][2])
-    env.env.safeAreaMaxInsetBottom = nav
-    const keyboard = createKeyboard({ win: env.win })
-    keyboard.dock({ style: {} } as HTMLElement)
-    if (tap) {
-      // The tap on the field says where the page is on the screen: 700px down the screen is 700 - top in the page.
-      env.win.dispatchEvent(Object.assign(new Event('pointerdown'), { screenY: 700, clientY: 700 - top }))
-    }
-    env.doc.activeElement = element(TEXT)
-    env.fire('focusin', TEXT)
-    env.apply({ ...t.events[0][2], kb, ov: true })
-    env.fire('geometrychange')
-    vi.advanceTimersByTime(500)
-    const height = keyboard.state.height
-    keyboard.destroy()
+describe('docking asks the browser to resize the page (interactive-widget=resizes-content)', () => {
+  it('only while something is docked, and gives the viewport tag back', () => {
+    vi.useFakeTimers()
+    const env = fakeWindow(trace(PIXEL).trace.meta, trace(PIXEL).trace.events[0][2])
+    const kb = createKeyboard({ win: env.win })
+    const before = env.viewport.content
+    const undockA = kb.dock({ style: {} } as HTMLElement)
+    const undockB = kb.dock({ style: {} } as HTMLElement)
+    expect(env.viewport.content).toBe(before + ',interactive-widget=resizes-content')
+    expect(env.vk!.overlaysContent).toBe(false) // the VirtualKeyboard API would stop the browser resizing
+    undockA()
+    undockA() // calling twice is harmless
+    expect(env.viewport.content).toBe(before + ',interactive-widget=resizes-content')
+    undockB()
+    expect(env.viewport.content).toBe(before)
+    kb.dock({ style: {} } as HTMLElement)
+    kb.destroy() // destroying while docked gives it back too
+    expect(env.viewport.content).toBe(before)
     vi.useRealTimers()
-    return height
-  }
-
-  // The lab emulator (Android 16, 24px status bar, 24px gesture bar, Chromium 159), checked against where
-  // Android itself says the keyboard is.
-  it('drawn under the gesture bar (viewport-fit=cover): the keyboard covers the gesture bar too', () => {
-    expect(open({ ih: 834, top: 80 })).toBe(312 + 23) // was 24px behind the keyboard
   })
 
-  it("above Chrome's bottom bar: the keyboard covers that much less", () => {
-    expect(open({ ih: 754, top: 81 })).toBe(312 - 56) // was 56px above the keyboard
-  })
-
-  it('ending at the top of the navigation bar, as Chrome assumes: unchanged', () => {
-    expect(open({ ih: 811, top: 80 })).toBe(312)
-  })
-
-  // A Nothing Phone (1): Chrome 156 and Chrome Dev 158 from traces (innerHeight, 345px reported); its 52px status
-  // bar and 25px gesture bar estimated from screenshots, where the keyboard's top is 370px above the bottom.
-  it('a real phone, toolbar at the top, drawn under the gesture bar: on the keyboard, not 25px behind it', () => {
-    expect(open({ ih: 806, top: 109, nav: 25, kb: 345 })).toBe(370)
-  })
-
-  it('a real phone, Chrome Dev with the bottom bar: on the keyboard, not 55px above it', () => {
-    expect(open({ ih: 726, top: 109, nav: 25, kb: 345 })).toBe(290)
-  })
-
-  it("no correction where Chrome gives no navigation bar height (older Chrome, 3-button navigation, desktop)", () => {
-    // 0 can't be told from no bar. With 3-button navigation the page ends at the bar, so Chrome's number is right.
-    expect(open({ ih: 835, top: 80, nav: 0 })).toBe(312)
-  })
-
-  it('no correction before the first tap', () => {
-    expect(open({ ih: 834, top: 80, tap: false })).toBe(312)
-  })
-
-  it('a tap while the keyboard is up keeps the correction (Chrome reports the bar as 0 then)', () => {
-    // Seen in the lab: tapping "Number" with the keyboard up lost the correction, and the bar went 25px behind.
-    vi.useFakeTimers({ now: 0 })
-    const t = trace({ ...PIXEL, ih: 834 }).trace
-    const env = fakeWindow(t.meta, t.events[0][2])
-    env.env.safeAreaMaxInsetBottom = 24
-    const keyboard = createKeyboard({ win: env.win })
-    keyboard.dock({ style: {} } as HTMLElement)
-    const tap = () => env.win.dispatchEvent(Object.assign(new Event('pointerdown'), { screenY: 700, clientY: 620 }))
-    tap()
-    env.doc.activeElement = element(TEXT)
-    env.fire('focusin', TEXT)
-    env.apply({ ...t.events[0][2], kb: 312, ov: true })
-    env.fire('geometrychange')
-    vi.advanceTimersByTime(500)
-    expect(keyboard.state.height).toBe(335)
-    env.env.safeAreaMaxInsetBottom = 0 // the keyboard is up
-    tap() // a chip above the keyboard switches to the number pad
-    env.apply({ ...t.events[0][2], kb: 267, ov: true })
-    env.fire('geometrychange')
-    vi.advanceTimersByTime(500)
-    expect(keyboard.state.height).toBe(267 + 23)
-    keyboard.destroy()
+  it("leaves a page's own interactive-widget alone", () => {
+    vi.useFakeTimers()
+    const env = fakeWindow(trace(PIXEL).trace.meta, trace(PIXEL).trace.events[0][2])
+    env.viewport.content = 'width=device-width, interactive-widget=resizes-visual'
+    const kb = createKeyboard({ win: env.win })
+    kb.dock({ style: {} } as HTMLElement)
+    expect(env.viewport.content).toBe('width=device-width, interactive-widget=resizes-visual')
+    kb.destroy()
     vi.useRealTimers()
+  })
+
+  it('when the browser shrinks the page itself, the bar is left where the browser puts it', () => {
+    // Chrome with resizes-content, measured in the lab: innerHeight and the visible height shrink together.
+    const r = replay(
+      trace({ ...PIXEL, ih: 811 })
+        .at(100, 'focusin', {}, TEXT)
+        .at(400, 'resize', { ih: 450, h: 450 })
+        .at(401, 'vv.resize')
+        .at(2000, 'focusout')
+        .at(2300, 'resize', { ih: 811, h: 811 })
+        .at(2301, 'vv.resize')
+        .end(3000),
+    )
+    expect(at(r, 1000)).toMatchObject({ phase: 'open', height: 0 })
+    expect(r.final).toMatchObject({ phase: 'closed', height: 0 })
   })
 })
 
@@ -272,7 +237,7 @@ describe('iPhone Safari', () => {
   })
 })
 
-describe('browsers that shrink the page themselves (Firefox, Brave)', () => {
+describe('browsers that shrink the page themselves (resizes-content in Chrome and Firefox, older Firefox, Brave)', () => {
   const shrink = () =>
     trace(PIXEL)
       .at(100, 'focusin', {}, TEXT)
@@ -280,12 +245,66 @@ describe('browsers that shrink the page themselves (Firefox, Brave)', () => {
       .at(401, 'resize')
       .end(1500)
 
-  it('reports open with nothing to move, and learns not to predict', () => {
+  it('reports open with nothing left to move, and learns the keyboard height for the next prediction', () => {
     const storage = new Map<string, string>()
     const first = replay(shrink(), { storage })
     expect(first.final).toMatchObject({ open: true, phase: 'open', height: 0 })
+    expect(JSON.parse(storage.get('keybry')!)).toEqual({ textP412x915: KB })
     const second = replay(shrink(), { storage })
-    expect(second.states.every(([, s]) => s.height == 0)).toBe(true)
+    expect(at(second, 120)).toMatchObject({ phase: 'opening', height: KB }) // lifted at once
+    expect(second.final).toMatchObject({ phase: 'open', height: 0 }) // then the browser's
+  })
+
+  /** Docks a bar with `saved` as the saved height, focuses a field, then plays `browser` frame by frame. */
+  const handover = (saved: number | undefined, browser: (env: ReturnType<typeof fakeWindow>, first: Sample) => void) => {
+    vi.useFakeTimers({ now: 0 })
+    const storage = new Map<string, string>()
+    if (saved) storage.set('keybry', JSON.stringify({ textP412x915: saved }))
+    const t = trace(PIXEL).trace
+    const env = fakeWindow(t.meta, t.events[0][2], storage)
+    const kb = createKeyboard({ win: env.win })
+    const el = { style: {} as CSSStyleDeclaration } as HTMLElement
+    kb.dock(el)
+    env.doc.activeElement = element(TEXT)
+    env.fire('focusin', TEXT)
+    const lifted = el.style.transform
+    vi.advanceTimersByTime(200)
+    browser(env, t.events[0][2])
+    const result = { lifted, transform: el.style.transform, transition: el.style.transition, state: kb.state }
+    kb.destroy()
+    vi.useRealTimers()
+    return result
+  }
+  const frame = () => vi.advanceTimersByTime(17)
+
+  it('hands the lift over to the browser in the same frame, without animating', () => {
+    // Chrome with resizes-content: the page and the visible area shrink together.
+    const r = handover(KB, (env, s) => {
+      env.apply({ ...s, ih: 839 - KB, h: 839 - KB })
+      env.fire('resize')
+      frame()
+    })
+    expect(r.lifted).toBe(`translateY(-${KB}px)`) // the moment the field was tapped
+    expect(r).toMatchObject({ transform: '', transition: 'none', state: { phase: 'open', height: 0 } })
+  })
+
+  it('when innerHeight shrinks a frame before the visible height (Firefox), the bar is never lifted twice', () => {
+    const r = handover(KB, (env, s) => {
+      env.apply({ ...s, ih: 839 - KB }) // the visible height hasn't caught up yet
+      env.fire('resize')
+      frame()
+    })
+    expect(r).toMatchObject({ transform: '', transition: 'none', state: { phase: 'opening', height: 0 } })
+  })
+
+  it('the first time, the guess hands over the same way', () => {
+    const r = handover(undefined, (env, s) => {
+      env.apply({ ...s, ih: 839 - KB, h: 839 - KB })
+      env.fire('resize')
+      frame()
+    })
+    expect(r.lifted).toBe('translateY(-384px)') // 42% of the screen
+    expect(r).toMatchObject({ transform: '', transition: 'none', state: { phase: 'open', height: 0 } })
   })
 })
 
@@ -537,6 +556,7 @@ describe('how the bar moves when the keyboard closes', () => {
     vi.useFakeTimers({ now: 0 })
     const t = trace(device).trace
     const env = fakeWindow(t.meta, t.events[0][2])
+    if (env.vk) env.vk.overlaysContent = true // the exact path: a page that turned the API on
     const kb = createKeyboard({ win: env.win })
     const el = { style: {} as CSSStyleDeclaration } as HTMLElement
     kb.dock(el)

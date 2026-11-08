@@ -2,8 +2,14 @@
 
 ## Unreleased
 
-- Chrome on Android: the bar sits on the keyboard when the page doesn't end at the top of the navigation bar. Drawn under the gesture bar (`viewport-fit=cover`), it was hidden 24px behind the keyboard; above Chrome's bottom toolbar, it floated 56px above it. Chrome measures the keyboard from the top of the navigation bar, and keybry now corrects for where the page really ends, from the last tap's position on the screen and `env(safe-area-max-inset-bottom)` (Chrome 135+).
-- Size: about 1.9 kB (was 1.7 kB).
+- Android: while something is docked, keybry adds `interactive-widget=resizes-content` to the viewport tag (as ChatGPT and claude.ai do) instead of turning on Chrome's VirtualKeyboard API. Chrome and Firefox then move the bar themselves, from Android's real keyboard position:
+  - it lands exactly on the keyboard with Chrome's bottom toolbar (was 56px above it) and on pages drawn under the gesture bar (was 24px behind it), because Chrome's API measures the keyboard from the top of the navigation bar;
+  - it drops within a frame or two of a close (was up to 0.3 s late, then a 0.25 s slide);
+  - in Firefox it stays put when scrolling hides the toolbar (it slid behind the keyboard).
+
+  keybry still lifts the bar the moment a field is tapped, by the keyboard height it saved, and hands over to the browser in the same frame, so the bar doesn't move twice.
+- Pages that set `interactive-widget` themselves, or turn the VirtualKeyboard API's `overlaysContent` on, are left alone.
+- Size: about 1.8 kB (was 1.7 kB).
 
 ## 0.1.0
 

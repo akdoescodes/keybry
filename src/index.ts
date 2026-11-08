@@ -7,7 +7,8 @@ export type Phase = 'closed' | 'opening' | 'open'
 
 /**
  * Where `height` came from.
- * - `exact`: the browser's VirtualKeyboard API (Chrome, Edge, Samsung Internet while something is docked).
+ * - `exact`: the browser's VirtualKeyboard API, on pages that turned its `overlaysContent` on themselves.
+ *   (While something is docked, keybry asks Chromium and Firefox to resize the page instead: see `dock()`.)
  * - `measured`: worked out from the visual viewport.
  * - `predicted`: a guess made the moment a field was focused, before the keyboard reported anything.
  */
@@ -33,9 +34,11 @@ export interface Keyboard {
   /** Called on every change. Returns a function that stops listening. */
   subscribe(listener: Listener): () => void
   /**
-   * Keeps an element above the keyboard by moving it with a GPU transform (no layout, no re-render).
-   * The element should be anchored to the bottom of the page, e.g. `position: fixed; bottom: 0`.
-   * Returns a function that undocks it.
+   * Keeps an element above the keyboard. The element should be anchored to the bottom of the page, e.g.
+   * `position: fixed; bottom: 0`. While anything is docked, keybry adds `interactive-widget=resizes-content` to
+   * the page's viewport tag, so Chrome and Firefox on Android shrink the page for the keyboard and move the
+   * element themselves. Where the browser doesn't (Safari), keybry moves it with a GPU transform (no layout,
+   * no re-render). Returns a function that undocks it.
    */
   dock(el: HTMLElement): () => void
   /** Removes every listener and resets the CSS variable. */
@@ -73,7 +76,7 @@ interface VirtualKeyboard extends EventTarget {
 type Motion = 0 | 1 | 2
 type Inner = (state: KeyboardState, motion?: Motion) => void
 
-const { abs, max, min, round } = Math
+const { max, min, round } = Math
 
 /** Written on <html>, for CSS: `transform: translateY(calc(-1 * var(--keyboard-height)))`. */
 const VAR = '--keyboard-height'
@@ -153,8 +156,6 @@ export function createKeyboard({
   const raf = win.requestAnimationFrame.bind(win)
   const now = Date.now // read here, not at import, so a test's fake clock is the one used
   const appOverlay = !!vk && vk.overlaysContent
-  /** From the last tap: the page's top on the screen, plus the navigation bar's height, minus the screen's. */
-  let tapped = NaN
 
   // Saved heights, keyed by keyboard kind, orientation and screen size. localStorage first;
   // if that throws (private mode, sandboxed iframe) the object simply lives in memory.
@@ -180,6 +181,8 @@ export function createKeyboard({
   let frame = 0
   /** When the current prediction started, and whether it was given up on before a keyboard came. */
   let predictedAt = 0
+  /** innerHeight when the prediction started: how much the page itself has shrunk since is the browser's share. */
+  let focusIh = 0
   /** When focus last left a field (moving between fields always passes through here). */
   let moved = 0
   let gaveUp = false
@@ -216,28 +219,14 @@ export function createKeyboard({
 
   const exact = () => vk?.overlaysContent
 
-  /**
-   * How far below the top of the navigation bar the page ends, on Android. Chrome measures the keyboard from
-   * there (its height minus the navigation bar's), as if every page ended there. A page drawn under the
-   * gesture bar (`viewport-fit=cover`) ends lower, so the keyboard covers that much more of it; above a
-   * toolbar at the bottom of the screen, it ends higher and the keyboard covers that much less.
-   * The page ends at its top on the screen (from the last tap) plus innerHeight. The navigation bar starts its
-   * height above the bottom of the screen. NaN before the first tap; no correction then, nor where the browser
-   * gives no navigation bar height (see point()).
-   */
-  const edge = () => {
-    const d = tapped + win.innerHeight
-    // Anything larger than 200 isn't a toolbar or a gesture bar (a window in split screen, say): leave it alone.
-    return abs(d) < 200 ? round(d) : 0
-  }
-
   /** Reads the browser. `kb` is the keyboard's own height; `inset` is how much of the page it covers. */
   const measure = (): { open: boolean; inset: number; kb: number; turned?: boolean; jumped?: boolean } => {
     if (exact()) {
-      // With overlaysContent nothing resizes: the keyboard simply covers its own height, give or take where
-      // the page ends (see edge()).
+      // With overlaysContent nothing resizes: the keyboard simply covers its own height. (On Android, Chrome
+      // measures it from the top of the navigation bar, so pages that don't end there are off by the difference:
+      // one reason keybry asks for resizes-content instead. See docs/design.md.)
       const h = round(vk!.boundingRect.height)
-      return { open: h > 0, inset: h && max(0, h + edge()), kb: h }
+      return { open: h > 0, inset: h, kb: h }
     }
     const ih = win.innerHeight
     const w = round(vv.width)
@@ -271,8 +260,9 @@ export function createKeyboard({
   const commit = (next: KeyboardState, motion: Motion, keyboard: number) => {
     lastKb = keyboard
     if (next.height == state.height && next.phase == state.phase && next.source == state.source) return
-    // Save real heights, not iOS panning the page while the keyboard sits still.
-    if (motion && kind && next.phase == 'open') learn(next.height)
+    // Save real heights, not iOS panning the page while the keyboard sits still. Where the browser lifted the bar
+    // itself (0 left for keybry), save the keyboard's height: what the next prediction should lift it by.
+    if (motion && kind && next.phase == 'open') learn(next.height || keyboard)
     state = next
     style.setProperty(VAR, next.height + 'px')
     listeners.forEach((fn) => fn(next, motion))
@@ -295,8 +285,16 @@ export function createKeyboard({
       cancel(waitTimer)
       next = make(m.inset, 'open', exact() ? 'exact' : 'measured')
     } else if (kind && predicted) {
-      next = make(predicted, 'opening', 'predicted')
+      // The page may have got shorter for the keyboard already (see dock()): the browser has lifted the bar that
+      // much, so keybry lifts it that much less.
+      next = make(max(0, predicted - max(0, focusIh - win.innerHeight)), 'opening', 'predicted')
     }
+    // The browser moved the bar this frame, by resizing the page: take over from it in the same frame, without
+    // animating, or the bar is lifted twice (it sat a whole keyboard too high for 0.1 s on Chrome). Then save the
+    // keyboard's own height: the next prediction lifts the bar exactly as far as the page will shrink, and the
+    // browser takes over without a visible move.
+    const handover = m.jumped && !exact() && kind && (next.phase == 'opening' || (m.open && !m.inset))
+    if (handover && m.open) learn(m.kb)
     // Animate when the keyboard opens or closes, and when the exact API reports a new size (it does so
     // as the keyboard starts to move). Anything else tracks instantly: on the measured path, changes
     // while open are the browser scrolling or its toolbar sliding (Firefox hides the toolbar and
@@ -305,7 +303,7 @@ export function createKeyboard({
     // How to move. The exact API reports as the keyboard starts to move, and focus and blur come
     // before it moves, so those slide in step with it. A measurement on the other path arrives once
     // the keyboard has finished moving (Firefox: ~0.3 s after closing starts), so catch up quickly.
-    const motion: Motion = animate ? (!exact() && kind && next.phase != 'opening' ? 2 : 1) : 0
+    const motion: Motion = animate && !handover ? (!exact() && kind && next.phase != 'opening' ? 2 : 1) : 0
     // Growing applies at once so nothing is ever covered, and so do those instant changes and closing
     // after focus left. Opening, closing or resizing while a field is focused waits for the numbers
     // to stop changing:
@@ -316,6 +314,7 @@ export function createKeyboard({
     //   closing, so the bar goes down at once.
     // An instant change right after innerHeight jumped waits for the matching visible height too.
     if (
+      handover ||
       (!animate && !m.jumped) ||
       next.height >= state.height ||
       m.turned ||
@@ -348,6 +347,7 @@ export function createKeyboard({
       if (p > 0) {
         predicted = p
         predictedAt = now()
+        focusIh = win.innerHeight
         gaveUp = false
         cancel(waitTimer)
         waitTimer = later(
@@ -378,37 +378,22 @@ export function createKeyboard({
     }, BLUR)
   }
 
+  /**
+   * While something is docked, ask the browser to resize the page for the keyboard
+   * (`interactive-widget=resizes-content`, as ChatGPT and claude.ai do). Chrome and Firefox on Android then move
+   * a bar at the bottom of the page themselves, as the keyboard starts to move, and from where Android says the
+   * keyboard is: the bar drops within a frame or two of a close, and toolbars and the gesture bar don't matter.
+   * keybry measures 0 there and moves nothing. Safari ignores the setting, and keybry moves the bar.
+   * A page that chose its own interactive-widget, or turned the VirtualKeyboard API's overlaysContent on, is
+   * left alone. Only an existing viewport tag is changed: adding one would change the page's whole layout.
+   */
+  const meta = doc.querySelector<HTMLMetaElement>('meta[name=viewport]')
+  const own = meta ? meta.content : ''
   const overlay = (change: number) => {
     docks += change
-    // The exact numbers need overlaysContent, which stops Chrome from shrinking the page when the
-    // keyboard opens. Only switch it on while something is docked, and give back the app's own value.
-    if (vk) {
-      vk.overlaysContent = docks > 0 || appOverlay
-      sync()
-    }
-  }
-
-  /**
-   * A tap tells where the page is on the screen (see edge()), on the exact path. Not while zoomed: zoom scales
-   * clientY, not screenY. The navigation bar's height is env(safe-area-max-inset-bottom) (Chrome 135+ on
-   * Android), whether or not the page is drawn under it. It's 0 where Chrome can't draw under the bar
-   * (3-button navigation, older versions) and everywhere else, and 0 can't be told from no bar: no correction.
-   * Read here, on a tap, because it costs a style recalculation, which a keyboard animation frame shouldn't pay.
-   * Only while the keyboard is down: Chrome reports the height as 0 while it's up. The tap that opens it comes
-   * before the field takes focus, so it counts.
-   */
-  const point = (e: Event) => {
-    if (!state.open && exact() && vv.scale == 1) {
-      const probe = doc.createElement('i')
-      probe.style.margin = 'env(safe-area-max-inset-bottom,0px)'
-      doc.documentElement.append(probe)
-      tapped =
-        (e as PointerEvent).screenY -
-        (e as PointerEvent).clientY +
-        (parseFloat(win.getComputedStyle(probe).marginTop) || NaN) -
-        win.screen.height
-      probe.remove()
-    }
+    // No sync(): if the change resizes the page (the keyboard is up), the browser says so with a resize event.
+    if (meta && !appOverlay && !/interactive-widget/.test(own))
+      meta.content = docks > 0 ? own + ',interactive-widget=resizes-content' : own
   }
 
   const events: [EventTarget | null | undefined, string, (e: Event) => void][] = [
@@ -416,7 +401,6 @@ export function createKeyboard({
     [vv, 'scroll', sync],
     [win, 'resize', sync],
     [vk, 'geometrychange', sync],
-    [win, 'pointerdown', point],
     [win, 'focusin', focus],
     // Tapping a field that is already focused reopens a keyboard dismissed with the Android back button.
     [win, 'click', focus],
@@ -450,7 +434,7 @@ export function createKeyboard({
     listen(false)
     ;[waitTimer, settleTimer, blurTimer].forEach(cancel)
     listeners.clear()
-    if (vk) vk.overlaysContent = appOverlay
+    if (docks) overlay(-docks)
     style.removeProperty(VAR)
   }
 

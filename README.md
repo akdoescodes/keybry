@@ -10,10 +10,10 @@
 **[Try it on your phone →](https://akdoescodes.github.io/keybry/)**
 
 - **On time.** It starts moving the moment a field is tapped, using the height it saved on this device last time.
-- **Exact where possible.** Uses Chrome's VirtualKeyboard API (Chrome, Edge, Samsung Internet), and the visual viewport everywhere else.
+- **The browser's own move where it's right.** On Android, keybry asks Chrome and Firefox to resize the page for the keyboard, as ChatGPT and claude.ai do: they move the bar from Android's real keyboard position, and drop it within a frame or two of a close. keybry lifts it the moment a field is tapped and hands over without a visible move. In Safari, keybry moves it from the visual viewport.
 - **No bounce.** Hopping between fields, or the keyboard closing and reopening, doesn't make the bar jump.
 - **Fast.** Moves your element with a GPU transform. No layout, no React re-renders.
-- **Small.** About 1.9 kB min+brotli, with zero dependencies, and it's safe for server rendering.
+- **Small.** About 1.8 kB min+brotli, with zero dependencies, and it's safe for server rendering.
 
 ```sh
 npm install keybry
@@ -35,7 +35,7 @@ The usual fixes fall short:
  field tapped ──▶ 1. PREDICT  height saved on this device last time (first time: a deliberately tall guess)
                      │        the bar starts moving now, on an iOS-like curve
                      ▼
- browser reports ─▶ 2. MEASURE exact rect from the VirtualKeyboard API, or the visual viewport
+ browser reports ─▶ 2. MEASURE the visual viewport; where the browser shrank the page itself (Android), hand over
                      │
                      ▼
                   3. CORRECT  glide to the real number; ignore dips while focus hops between fields
@@ -181,12 +181,13 @@ From `keybry/recorder` (a separate import, not part of the core):
 ## Good to know
 
 - **Use 16px or larger text in inputs.** Smaller text makes iOS zoom the page on focus, which moves everything.
-- **While something is docked, Chrome stops shrinking the page for the keyboard.** The exact numbers need `navigator.virtualKeyboard.overlaysContent = true`, which keybry switches on only while at least one element is docked, then restores. Other inputs on the page aren't scrolled into view automatically during that time.
-- **Chrome on Android measures the keyboard from the top of the navigation bar**, as if every page ended there. Pages drawn under the gesture bar (`viewport-fit=cover`) end lower, and pages above Chrome's bottom toolbar end higher. keybry corrects for that from where the last tap says the page is on the screen and the navigation bar's height (`env(safe-area-max-inset-bottom)`, Chrome 135+). Where that height is 0 (older Chrome, 3-button navigation), Chrome's number is used as is.
+- **While something is docked, the page resizes for the keyboard.** keybry adds `interactive-widget=resizes-content` to your viewport tag, and gives the tag back when nothing is docked. Chrome and Firefox on Android then shrink the page when the keyboard opens, so `100dvh` layouts, scrolling inputs into view and the bar all follow the keyboard. If your tag already sets `interactive-widget`, keybry leaves it alone. Pages without a viewport tag aren't changed.
+- **Why not Chrome's VirtualKeyboard API.** On Android, Chrome measures the keyboard from the top of the navigation bar, so with its bottom toolbar, or a page drawn under the gesture bar (`viewport-fit=cover`), the number is off by that much, and it reports a close only near the end of the keyboard's slide. If your page turns `overlaysContent` on itself, keybry uses that number as is.
+- **Firefox's expanded toolbar** (address bar and navigation bar at the bottom) keeps a 48 px empty strip below the page while the keyboard is up: it hides the navigation bar but keeps its room. No page can see it, so the bar sits 48 px above Firefox's address bar there.
 - **`dock()` takes over the element's inline `transform`.** Put your own transforms on a wrapper.
 - **The first open on a device is a guess.** It's deliberately on the tall side, because a bar that starts a little high and settles looks fine, and a bar hidden behind the keyboard does not. From the second open, the saved height is used.
 - **Short strips count too.** The iPad shortcut bar shown with a hardware keyboard, or Chrome's autofill bar, is far shorter than a keyboard. The bar still sits on top of it.
-- **Firefox for Android** is supported on the measured path. It reports a fine pointer on phones with a stylus, so keybry detects touch with `navigator.maxTouchPoints`, not `(pointer: coarse)`. It also reports the keyboard later than Chrome, and hides its toolbar when the page scrolls (see the layout tip).
+- **Firefox for Android** resizes the page itself (132+). It reports a fine pointer on phones with a stylus, so keybry detects touch with `navigator.maxTouchPoints`, not `(pointer: coarse)`. Without the resize, scrolling with the keyboard up hid its toolbar and slid the bar behind the keyboard.
 - **Not handled yet:** pages that are pinch-zoomed.
 
 ## Help it work on your phone

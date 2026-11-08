@@ -9,6 +9,13 @@ const input = $('message')
 const feed = $('feed')
 const status = $('status')
 
+// For comparing and testing, not needed in an app:
+// ?visual keeps the browser's own keyboard handling (keybry leaves a page's own interactive-widget alone), as
+// before keybry asked Chrome and Firefox to resize the page; ?mark paints the bar's edges for the lab's screenshots.
+const params = new URLSearchParams(location.search)
+if (params.has('visual')) document.querySelector('meta[name=viewport]').content += ', interactive-widget=resizes-visual'
+if (params.has('mark')) composer.style.cssText += 'border-top: 3px solid #f0f; box-shadow: inset 0 -3px #0ff'
+
 // The whole integration: one line.
 dock(composer)
 
@@ -18,11 +25,6 @@ if (navigator.maxTouchPoints > 0) root.classList.add('touch')
 const kb = keyboard()
 const recorder = record({ keyboard: kb })
 window.keybry = kb // for the lab, and for poking at in DevTools
-
-// Where the page sits on the screen, from the last tap: the numbers keybry corrects Chrome's keyboard height
-// with on Android (see edge() in src/index.ts). Shown in Details.
-let pageTop = null
-addEventListener('pointerdown', (e) => (pageTop = Math.round(e.screenY - e.clientY)), true)
 
 // Keep the last message visible above the composer (the CSS adds --keyboard-height on top).
 new ResizeObserver(() => root.style.setProperty('--composer-height', composer.offsetHeight + 'px')).observe(composer)
@@ -274,15 +276,23 @@ const facts = () => {
   const heights = Object.entries(saved)
     .filter(([k]) => k != 'wait')
     .map(([k, v]) => `${describeKey(k)}: ${v ? `${v}px` : 'nothing moves'}`)
+  const viewport = document.querySelector('meta[name=viewport]').content
   const method =
     vk && vk.overlaysContent
       ? 'Exact: the browser reports the keyboard (VirtualKeyboard API)'
       : navigator.maxTouchPoints > 0
         ? 'Measured from the visible area (visualViewport)'
         : 'None: no touch screen, so nothing moves'
+  // While the bar is docked, keybry asks the browser to shrink the page for the keyboard; Chrome and Firefox on
+  // Android then move the bar themselves (keybry measures 0), Safari ignores it and keybry moves the bar.
+  const resize = /interactive-widget=resizes-content/.test(viewport)
+    ? 'Asked to shrink the page for the keyboard (interactive-widget=resizes-content): ' +
+      (s.open ? (s.height ? 'this browser doesn’t, so keybry moves the bar' : 'this browser does, and moves the bar itself') : 'open the keyboard to see')
+    : `Not asked: the page chose ${(viewport.match(/interactive-widget=[\w-]+/) || ['its own setting'])[0]}`
   return [
     ['Browser', device()],
     ['Method', method],
+    ['Resizing', resize],
     ['Touch', `${navigator.maxTouchPoints} touch points, pointer reported as ${matchMedia('(pointer:coarse)').matches ? 'coarse' : 'fine'}`],
     ['HTTPS', isSecureContext ? 'Yes' : 'No (Chrome only gives exact numbers over HTTPS)'],
     ['Keyboard', s.phase == 'closed' ? 'closed' : `${s.phase} · ${s.height}px · ${s.source}`],
@@ -299,24 +309,6 @@ const facts = () => {
         const visible = vv.offsetTop + vv.height
         const gap = Math.round(visible - bottom)
         return `bottom ${Math.round(bottom)}, visible bottom ${Math.round(visible)}: ${gap == 0 ? 'on the keyboard' : gap > 0 ? `${gap}px above it` : `${-gap}px behind it`}`
-      })(),
-    ],
-    [
-      // Chrome on Android measures the keyboard from the top of the navigation bar. How far below that the page
-      // ends is what keybry adds to Chrome's number (negative: a toolbar at the bottom).
-      'Page edge',
-      (() => {
-        if (pageTop == null) return 'tap the page to see'
-        const probe = document.createElement('i')
-        probe.style.margin = 'env(safe-area-max-inset-bottom,0px)'
-        root.append(probe)
-        const nav = Math.round(parseFloat(getComputedStyle(probe).marginTop))
-        probe.remove()
-        const page = `page ${pageTop}–${pageTop + innerHeight} of a ${screen.height}px screen`
-        if (!nav) return `${page}, navigation bar height not reported (safe-area-max-inset-bottom is 0), so no correction`
-        const navTop = screen.height - nav
-        const d = pageTop + innerHeight - navTop
-        return `${page}, ${nav}px navigation bar from ${navTop}: the page ends ${Math.abs(d)}px ${d < 0 ? 'above' : 'below'} it`
       })(),
     ],
     ['Saved', heights.length ? heights.join('; ') : 'nothing yet: tap the message box'],
