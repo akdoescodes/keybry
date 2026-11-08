@@ -3,12 +3,12 @@
     "name": "core: dock()",
     "path": "dist/index.js",
     "import": "{ dock }",
-    "limit": "1.85 kB"
+    "limit": "1.9 kB"
   },
   {
     "name": "core: everything",
     "path": "dist/index.js",
-    "limit": "1.85 kB"
+    "limit": "1.9 kB"
   },
   {
     "name": "react: <Dock> + useKeyboard() (core included, react excluded)",
@@ -17,7 +17,7 @@
     "ignore": [
       "react"
     ],
-    "limit": "1.95 kB"
+    "limit": "2 kB"
   },
   {
     "name": "recorder (separate import, not in the core)",

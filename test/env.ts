@@ -30,6 +30,8 @@ export function fakeWindow(meta: Trace['meta'], first: Sample, storage = new Map
   const vv: any = new EventTarget()
   const vk = meta.vk ? new FakeVirtualKeyboard() : undefined
   const css = new Map<string, string>()
+  /** What env(safe-area-max-inset-bottom) resolves to: the navigation bar Chrome on Android can draw under. */
+  const env = { safeAreaMaxInsetBottom: 0 }
   const doc = {
     activeElement: null as unknown,
     documentElement: {
@@ -37,7 +39,9 @@ export function fakeWindow(meta: Trace['meta'], first: Sample, storage = new Map
         setProperty: (k: string, v: string) => void css.set(k, v),
         removeProperty: (k: string) => void css.delete(k),
       },
+      append: () => {},
     },
+    createElement: () => ({ style: {} as Record<string, string>, remove: () => {} }),
   }
   Object.assign(win, {
     document: doc,
@@ -53,6 +57,10 @@ export function fakeWindow(meta: Trace['meta'], first: Sample, storage = new Map
       },
     },
     devicePixelRatio: meta.dpr,
+    // Only the probe keybry reads the navigation bar's height with.
+    getComputedStyle: (el: { style: Record<string, string> }) => ({
+      marginTop: /safe-area-max-inset-bottom/.test(el.style.margin ?? '') ? env.safeAreaMaxInsetBottom + 'px' : '0px',
+    }),
     matchMedia: (q: string) => ({ matches: q.includes('coarse') ? meta.coarse : false }),
     localStorage: {
       getItem: (k: string) => storage.get(k) ?? null,
@@ -97,7 +105,7 @@ export function fakeWindow(meta: Trace['meta'], first: Sample, storage = new Map
   }
 
   apply(first)
-  return { win: win as Window, vk, css, doc, storage, apply, fire, dispatch }
+  return { win: win as Window, vk, css, doc, storage, env, apply, fire, dispatch }
 }
 
 /** What a docked bar should be at: how far the keyboard really covers the page. */

@@ -2,8 +2,8 @@
 
 ## Unreleased
 
-- Chrome on Android: the bar sits on the keyboard when the page doesn't end at the top of the navigation bar. Drawn under the gesture bar (`viewport-fit=cover`), it was hidden 24px behind the keyboard; above Chrome's bottom toolbar, it floated 56px above it. Chrome measures the keyboard from the top of the navigation bar, and keybry now corrects for where the page really ends, from the last tap's position on the screen.
-- Size: about 1.8 kB (was 1.7 kB).
+- Chrome on Android: the bar sits on the keyboard when the page doesn't end at the top of the navigation bar. Drawn under the gesture bar (`viewport-fit=cover`), it was hidden 24px behind the keyboard; above Chrome's bottom toolbar, it floated 56px above it. Chrome measures the keyboard from the top of the navigation bar, and keybry now corrects for where the page really ends, from the last tap's position on the screen and `env(safe-area-max-inset-bottom)` (Chrome 135+).
+- Size: about 1.9 kB (was 1.7 kB).
 
 ## 0.1.0
 

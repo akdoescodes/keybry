@@ -13,7 +13,7 @@
 - **Exact where possible.** Uses Chrome's VirtualKeyboard API (Chrome, Edge, Samsung Internet), and the visual viewport everywhere else.
 - **No bounce.** Hopping between fields, or the keyboard closing and reopening, doesn't make the bar jump.
 - **Fast.** Moves your element with a GPU transform. No layout, no React re-renders.
-- **Small.** About 1.8 kB min+brotli, with zero dependencies, and it's safe for server rendering.
+- **Small.** About 1.9 kB min+brotli, with zero dependencies, and it's safe for server rendering.
 
 ```sh
 npm install keybry
@@ -182,7 +182,7 @@ From `keybry/recorder` (a separate import, not part of the core):
 
 - **Use 16px or larger text in inputs.** Smaller text makes iOS zoom the page on focus, which moves everything.
 - **While something is docked, Chrome stops shrinking the page for the keyboard.** The exact numbers need `navigator.virtualKeyboard.overlaysContent = true`, which keybry switches on only while at least one element is docked, then restores. Other inputs on the page aren't scrolled into view automatically during that time.
-- **Chrome on Android measures the keyboard from the top of the navigation bar**, as if every page ended there. Pages drawn under the gesture bar (`viewport-fit=cover`) end lower, and pages above Chrome's bottom toolbar end higher. keybry corrects for that from where the last tap says the page is on the screen. Browsers that report the whole screen as available (`screen.availHeight`) get Chrome's number as is.
+- **Chrome on Android measures the keyboard from the top of the navigation bar**, as if every page ended there. Pages drawn under the gesture bar (`viewport-fit=cover`) end lower, and pages above Chrome's bottom toolbar end higher. keybry corrects for that from where the last tap says the page is on the screen and the navigation bar's height (`env(safe-area-max-inset-bottom)`, Chrome 135+). Where that height is 0 (older Chrome, 3-button navigation), Chrome's number is used as is.
 - **`dock()` takes over the element's inline `transform`.** Put your own transforms on a wrapper.
 - **The first open on a device is a guess.** It's deliberately on the tall side, because a bar that starts a little high and settles looks fine, and a bar hidden behind the keyboard does not. From the second open, the saved height is used.
 - **Short strips count too.** The iPad shortcut bar shown with a hardware keyboard, or Chrome's autofill bar, is far shorter than a keyboard. The bar still sits on top of it.

@@ -153,9 +153,8 @@ export function createKeyboard({
   const raf = win.requestAnimationFrame.bind(win)
   const now = Date.now // read here, not at import, so a test's fake clock is the one used
   const appOverlay = !!vk && vk.overlaysContent
-  const android = /Android/.test(win.navigator.userAgent)
-  /** Where the page's top edge is on the screen, from the last tap. */
-  let pageTop = NaN
+  /** From the last tap: the page's top on the screen, plus the navigation bar's height, minus the screen's. */
+  let tapped = NaN
 
   // Saved heights, keyed by keyboard kind, orientation and screen size. localStorage first;
   // if that throws (private mode, sandboxed iframe) the object simply lives in memory.
@@ -222,16 +221,14 @@ export function createKeyboard({
    * there (its height minus the navigation bar's), as if every page ended there. A page drawn under the
    * gesture bar (`viewport-fit=cover`) ends lower, so the keyboard covers that much more of it; above a
    * toolbar at the bottom of the screen, it ends higher and the keyboard covers that much less.
-   * The page ends at its top on the screen (from the last tap) plus innerHeight. The navigation bar starts
-   * where the screen's available area ends; a browser that reports the whole screen as available (Chrome 133)
-   * says nothing about it, and gets no correction.
+   * The page ends at its top on the screen (from the last tap) plus innerHeight. The navigation bar starts its
+   * height above the bottom of the screen. NaN before the first tap; no correction then, nor where the browser
+   * gives no navigation bar height (see point()).
    */
   const edge = () => {
-    const { availTop, availHeight, height } = win.screen as Screen & { availTop: number }
-    const d = pageTop + win.innerHeight - availTop - availHeight
-    // NaN before the first tap. Anything larger than 200 isn't a toolbar or a gesture bar (a window in split
-    // screen, say): leave it alone.
-    return android && availTop + availHeight < height && abs(d) < 200 ? round(d) : 0
+    const d = tapped + win.innerHeight
+    // Anything larger than 200 isn't a toolbar or a gesture bar (a window in split screen, say): leave it alone.
+    return abs(d) < 200 ? round(d) : 0
   }
 
   /** Reads the browser. `kb` is the keyboard's own height; `inset` is how much of the page it covers. */
@@ -391,9 +388,27 @@ export function createKeyboard({
     }
   }
 
-  /** A tap tells where the page is on the screen (see edge()). Not while zoomed: zoom scales clientY, not screenY. */
+  /**
+   * A tap tells where the page is on the screen (see edge()), on the exact path. Not while zoomed: zoom scales
+   * clientY, not screenY. The navigation bar's height is env(safe-area-max-inset-bottom) (Chrome 135+ on
+   * Android), whether or not the page is drawn under it. It's 0 where Chrome can't draw under the bar
+   * (3-button navigation, older versions) and everywhere else, and 0 can't be told from no bar: no correction.
+   * Read here, on a tap, because it costs a style recalculation, which a keyboard animation frame shouldn't pay.
+   * Only while the keyboard is down: Chrome reports the height as 0 while it's up. The tap that opens it comes
+   * before the field takes focus, so it counts.
+   */
   const point = (e: Event) => {
-    if (vv.scale == 1) pageTop = (e as PointerEvent).screenY - (e as PointerEvent).clientY
+    if (!state.open && exact() && vv.scale == 1) {
+      const probe = doc.createElement('i')
+      probe.style.margin = 'env(safe-area-max-inset-bottom,0px)'
+      doc.documentElement.append(probe)
+      tapped =
+        (e as PointerEvent).screenY -
+        (e as PointerEvent).clientY +
+        (parseFloat(win.getComputedStyle(probe).marginTop) || NaN) -
+        win.screen.height
+      probe.remove()
+    }
   }
 
   const events: [EventTarget | null | undefined, string, (e: Event) => void][] = [

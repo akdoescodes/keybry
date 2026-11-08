@@ -141,58 +141,89 @@ describe('Android Chrome, exact numbers from the VirtualKeyboard API', () => {
 
 describe('Android Chrome: the page does not end where Chrome measures the keyboard from', () => {
   // Chrome reports the keyboard's height minus the navigation bar's, as if every page ended at the top of the
-  // navigation bar. Numbers from the lab emulator (Android 16, 412x915, 24px status bar, 24px gesture bar,
-  // 312px keyboard), checked against where Android says the keyboard is.
-  const CHROMIUM_159 = { availTop: 24, availHeight: 867 } // the screen minus the status and gesture bars
-  const CHROME_133 = { availTop: 0, availHeight: 915 } // the whole screen: says nothing about the bars
+  // navigation bar. The bar's height comes from env(safe-area-max-inset-bottom), the page's place on the screen
+  // from the tap that opens the keyboard.
 
-  /** Opens a 312px keyboard on the exact path; returns how far the bar moved. */
-  const open = ({ ih, top, avail = CHROMIUM_159, ua = PIXEL.ua, tap = true }: { ih: number; top: number; avail?: object; ua?: string; tap?: boolean }) => {
+  /** Opens a keyboard Chrome reports as `kb` px on the exact path; returns how far the bar moved. */
+  const open = ({ ih, top, nav = 24, kb = 312, tap = true }: { ih: number; top: number; nav?: number; kb?: number; tap?: boolean }) => {
     vi.useFakeTimers({ now: 0 })
-    const device = { ...PIXEL, ua, ih }
-    const t = trace(device).trace
+    const t = trace({ ...PIXEL, ih }).trace // a 915px tall screen
     const env = fakeWindow(t.meta, t.events[0][2])
-    Object.assign(env.win.screen, avail)
-    const kb = createKeyboard({ win: env.win })
-    kb.dock({ style: {} } as HTMLElement)
+    env.env.safeAreaMaxInsetBottom = nav
+    const keyboard = createKeyboard({ win: env.win })
+    keyboard.dock({ style: {} } as HTMLElement)
     if (tap) {
       // The tap on the field says where the page is on the screen: 700px down the screen is 700 - top in the page.
-      const down = Object.assign(new Event('pointerdown'), { screenY: 700, clientY: 700 - top })
-      env.win.dispatchEvent(down)
+      env.win.dispatchEvent(Object.assign(new Event('pointerdown'), { screenY: 700, clientY: 700 - top }))
     }
     env.doc.activeElement = element(TEXT)
     env.fire('focusin', TEXT)
-    env.apply({ ...t.events[0][2], kb: 312, ov: true })
+    env.apply({ ...t.events[0][2], kb, ov: true })
     env.fire('geometrychange')
     vi.advanceTimersByTime(500)
-    const height = kb.state.height
-    kb.destroy()
+    const height = keyboard.state.height
+    keyboard.destroy()
     vi.useRealTimers()
     return height
   }
 
+  // The lab emulator (Android 16, 24px status bar, 24px gesture bar, Chromium 159), checked against where
+  // Android itself says the keyboard is.
   it('drawn under the gesture bar (viewport-fit=cover): the keyboard covers the gesture bar too', () => {
-    // Was 24px behind the keyboard.
-    expect(open({ ih: 834, top: 80 })).toBe(312 + 23)
+    expect(open({ ih: 834, top: 80 })).toBe(312 + 23) // was 24px behind the keyboard
   })
 
-  it('above a toolbar at the bottom of the screen: the keyboard covers that much less', () => {
-    // Was 56px above the keyboard.
-    expect(open({ ih: 754, top: 81 })).toBe(312 - 56)
+  it("above Chrome's bottom bar: the keyboard covers that much less", () => {
+    expect(open({ ih: 754, top: 81 })).toBe(312 - 56) // was 56px above the keyboard
   })
 
   it('ending at the top of the navigation bar, as Chrome assumes: unchanged', () => {
     expect(open({ ih: 811, top: 80 })).toBe(312)
   })
 
-  it('a browser that reports the whole screen as available gets no correction', () => {
-    // Chrome 133 also stops drawing under the gesture bar while the keyboard is up, so its number was right.
-    expect(open({ ih: 835, top: 80, avail: CHROME_133 })).toBe(312)
+  // A Nothing Phone (1): Chrome 156 and Chrome Dev 158 from traces (innerHeight, 345px reported); its 52px status
+  // bar and 25px gesture bar estimated from screenshots, where the keyboard's top is 370px above the bottom.
+  it('a real phone, toolbar at the top, drawn under the gesture bar: on the keyboard, not 25px behind it', () => {
+    expect(open({ ih: 806, top: 109, nav: 25, kb: 345 })).toBe(370)
   })
 
-  it('no correction before the first tap, or outside Android', () => {
+  it('a real phone, Chrome Dev with the bottom bar: on the keyboard, not 55px above it', () => {
+    expect(open({ ih: 726, top: 109, nav: 25, kb: 345 })).toBe(290)
+  })
+
+  it("no correction where Chrome gives no navigation bar height (older Chrome, 3-button navigation, desktop)", () => {
+    // 0 can't be told from no bar. With 3-button navigation the page ends at the bar, so Chrome's number is right.
+    expect(open({ ih: 835, top: 80, nav: 0 })).toBe(312)
+  })
+
+  it('no correction before the first tap', () => {
     expect(open({ ih: 834, top: 80, tap: false })).toBe(312)
-    expect(open({ ih: 834, top: 80, ua: 'Chrome on a touch laptop (synthetic)' })).toBe(312)
+  })
+
+  it('a tap while the keyboard is up keeps the correction (Chrome reports the bar as 0 then)', () => {
+    // Seen in the lab: tapping "Number" with the keyboard up lost the correction, and the bar went 25px behind.
+    vi.useFakeTimers({ now: 0 })
+    const t = trace({ ...PIXEL, ih: 834 }).trace
+    const env = fakeWindow(t.meta, t.events[0][2])
+    env.env.safeAreaMaxInsetBottom = 24
+    const keyboard = createKeyboard({ win: env.win })
+    keyboard.dock({ style: {} } as HTMLElement)
+    const tap = () => env.win.dispatchEvent(Object.assign(new Event('pointerdown'), { screenY: 700, clientY: 620 }))
+    tap()
+    env.doc.activeElement = element(TEXT)
+    env.fire('focusin', TEXT)
+    env.apply({ ...t.events[0][2], kb: 312, ov: true })
+    env.fire('geometrychange')
+    vi.advanceTimersByTime(500)
+    expect(keyboard.state.height).toBe(335)
+    env.env.safeAreaMaxInsetBottom = 0 // the keyboard is up
+    tap() // a chip above the keyboard switches to the number pad
+    env.apply({ ...t.events[0][2], kb: 267, ov: true })
+    env.fire('geometrychange')
+    vi.advanceTimersByTime(500)
+    expect(keyboard.state.height).toBe(267 + 23)
+    keyboard.destroy()
+    vi.useRealTimers()
   })
 })
 

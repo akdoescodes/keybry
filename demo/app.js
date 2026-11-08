@@ -306,11 +306,17 @@ const facts = () => {
       // ends is what keybry adds to Chrome's number (negative: a toolbar at the bottom).
       'Page edge',
       (() => {
-        const navTop = screen.availTop + screen.availHeight
         if (pageTop == null) return 'tap the page to see'
-        if (!(navTop < screen.height)) return `the browser reports the whole screen as available (${screen.availHeight}px), so no correction`
+        const probe = document.createElement('i')
+        probe.style.margin = 'env(safe-area-max-inset-bottom,0px)'
+        root.append(probe)
+        const nav = Math.round(parseFloat(getComputedStyle(probe).marginTop))
+        probe.remove()
+        const page = `page ${pageTop}–${pageTop + innerHeight} of a ${screen.height}px screen`
+        if (!nav) return `${page}, navigation bar height not reported (safe-area-max-inset-bottom is 0), so no correction`
+        const navTop = screen.height - nav
         const d = pageTop + innerHeight - navTop
-        return `page ${pageTop}–${pageTop + innerHeight}, navigation bar from ${navTop}: ends ${Math.abs(d)}px ${d < 0 ? 'above' : 'below'} it`
+        return `${page}, ${nav}px navigation bar from ${navTop}: the page ends ${Math.abs(d)}px ${d < 0 ? 'above' : 'below'} it`
       })(),
     ],
     ['Saved', heights.length ? heights.join('; ') : 'nothing yet: tap the message box'],
