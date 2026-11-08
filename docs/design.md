@@ -44,6 +44,15 @@ A prediction that sees no keyboard within `wait` (1000 ms; Firefox reports the k
 
 **Chrome's exact numbers.** `overlaysContent = true` is required, and it stops Chrome from shrinking the page. It's switched on only while at least one element is docked, and the app's own value is restored after.
 
+**Where the page ends (Chrome on Android).** Chrome reports the keyboard's height minus the navigation bar's (`KeyboardUtils.calculateKeyboardHeightFromWindowInsets`: the IME inset minus the bottom system bar inset), as if every page ended at the top of the navigation bar. Its visual viewport shrinks by the same number, so the measured path has the same error and switching paths doesn't help. Two common layouts end elsewhere:
+
+- Drawn under the gesture bar (`viewport-fit=cover`, edge-to-edge Chrome): the page ends lower, and the keyboard covers the gesture bar's height more than reported. The bar sat 24px behind the keyboard.
+- Above a toolbar at the bottom of the screen (Chrome's bottom bar): the page ends higher, and the keyboard covers the toolbar's height less. The bar floated 56px above the keyboard.
+
+So on Android the exact height gets `edge()` added: where the page ends on the screen minus where the navigation bar starts. The page's top on the screen is `screenY - clientY` of the last tap (every keyboard open starts with one), plus `innerHeight` for its bottom. The navigation bar starts at `screen.availTop + availHeight`. Chrome 133 reports the whole screen as available, which says nothing about the bars; it gets no correction, and it doesn't need one: it stops drawing under the gesture bar while the keyboard is up, and its bottom address bar moves to the top. Anything over 200px is ignored (not a toolbar or a gesture bar).
+
+Checked on the lab emulator (Android 16, Gboard) against where Android itself says the keyboard is (`dumpsys window`), in Chrome 133 and a Chromium 159 snapshot: on the keyboard within 2px in all four layouts, from 24px behind and 56px above before.
+
 **Speed.** `dock()` writes `transform` on the element directly: no layout, no style recalculation for the rest of the page, no framework. React hears about state changes only through `useSyncExternalStore`, and a selector limits re-renders to the value a component uses.
 
 **Testability.** Everything the engine knows comes through `win`. Tests pass a fake window built from a trace, so recorded phone behaviour runs through the real engine.
@@ -57,6 +66,7 @@ A prediction that sees no keyboard within `wait` (1000 ms; Firefox reports the k
 - **Smaller-than-predicted measurements wait for the numbers to stop changing.** This came from the scenario where iOS reports every frame of the animation.
 - **Firefox, from a real-keyboard run on Firefox 159.** The touch check, a 1000 ms `wait`, instant tracking on the measured path, no clamp at 0, and waiting out the `innerHeight` report that runs ahead. Before, the bar floated up to 164 px above the keyboard for most of a second whenever the page scrolled.
 - **Shadow DOM.** Focus is read through `composedPath()` and into `shadowRoot.activeElement`, so inputs inside web components work.
+- **Chrome on Android, corrected for where the page ends**, from screenshots of a real phone: the bar 25px behind the keyboard with Chrome's toolbar at the top, 55px above it with the bottom bar. The first emulator runs used Chrome 133 on its default layout, the one layout where Chrome's number is right, and the lab checked the bar against Chrome's own number. The lab now checks it against the keyboard's position from Android.
 
 ## Open questions (traces will answer)
 

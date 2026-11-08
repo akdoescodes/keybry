@@ -17,6 +17,12 @@ if (navigator.maxTouchPoints > 0) root.classList.add('touch')
 // Everything below is the demo and the guided test.
 const kb = keyboard()
 const recorder = record({ keyboard: kb })
+window.keybry = kb // for the lab, and for poking at in DevTools
+
+// Where the page sits on the screen, from the last tap: the numbers keybry corrects Chrome's keyboard height
+// with on Android (see edge() in src/index.ts). Shown in Details.
+let pageTop = null
+addEventListener('pointerdown', (e) => (pageTop = Math.round(e.screenY - e.clientY)), true)
 
 // Keep the last message visible above the composer (the CSS adds --keyboard-height on top).
 new ResizeObserver(() => root.style.setProperty('--composer-height', composer.offsetHeight + 'px')).observe(composer)
@@ -293,6 +299,18 @@ const facts = () => {
         const visible = vv.offsetTop + vv.height
         const gap = Math.round(visible - bottom)
         return `bottom ${Math.round(bottom)}, visible bottom ${Math.round(visible)}: ${gap == 0 ? 'on the keyboard' : gap > 0 ? `${gap}px above it` : `${-gap}px behind it`}`
+      })(),
+    ],
+    [
+      // Chrome on Android measures the keyboard from the top of the navigation bar. How far below that the page
+      // ends is what keybry adds to Chrome's number (negative: a toolbar at the bottom).
+      'Page edge',
+      (() => {
+        const navTop = screen.availTop + screen.availHeight
+        if (pageTop == null) return 'tap the page to see'
+        if (!(navTop < screen.height)) return `the browser reports the whole screen as available (${screen.availHeight}px), so no correction`
+        const d = pageTop + innerHeight - navTop
+        return `page ${pageTop}–${pageTop + innerHeight}, navigation bar from ${navTop}: ends ${Math.abs(d)}px ${d < 0 ? 'above' : 'below'} it`
       })(),
     ],
     ['Saved', heights.length ? heights.join('; ') : 'nothing yet: tap the message box'],

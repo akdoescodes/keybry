@@ -73,7 +73,7 @@ interface VirtualKeyboard extends EventTarget {
 type Motion = 0 | 1 | 2
 type Inner = (state: KeyboardState, motion?: Motion) => void
 
-const { max, min, round } = Math
+const { abs, max, min, round } = Math
 
 /** Written on <html>, for CSS: `transform: translateY(calc(-1 * var(--keyboard-height)))`. */
 const VAR = '--keyboard-height'
@@ -153,6 +153,9 @@ export function createKeyboard({
   const raf = win.requestAnimationFrame.bind(win)
   const now = Date.now // read here, not at import, so a test's fake clock is the one used
   const appOverlay = !!vk && vk.overlaysContent
+  const android = /Android/.test(win.navigator.userAgent)
+  /** Where the page's top edge is on the screen, from the last tap. */
+  let pageTop = NaN
 
   // Saved heights, keyed by keyboard kind, orientation and screen size. localStorage first;
   // if that throws (private mode, sandboxed iframe) the object simply lives in memory.
@@ -214,12 +217,30 @@ export function createKeyboard({
 
   const exact = () => vk?.overlaysContent
 
+  /**
+   * How far below the top of the navigation bar the page ends, on Android. Chrome measures the keyboard from
+   * there (its height minus the navigation bar's), as if every page ended there. A page drawn under the
+   * gesture bar (`viewport-fit=cover`) ends lower, so the keyboard covers that much more of it; above a
+   * toolbar at the bottom of the screen, it ends higher and the keyboard covers that much less.
+   * The page ends at its top on the screen (from the last tap) plus innerHeight. The navigation bar starts
+   * where the screen's available area ends; a browser that reports the whole screen as available (Chrome 133)
+   * says nothing about it, and gets no correction.
+   */
+  const edge = () => {
+    const { availTop, availHeight, height } = win.screen as Screen & { availTop: number }
+    const d = pageTop + win.innerHeight - availTop - availHeight
+    // NaN before the first tap. Anything larger than 200 isn't a toolbar or a gesture bar (a window in split
+    // screen, say): leave it alone.
+    return android && availTop + availHeight < height && abs(d) < 200 ? round(d) : 0
+  }
+
   /** Reads the browser. `kb` is the keyboard's own height; `inset` is how much of the page it covers. */
   const measure = (): { open: boolean; inset: number; kb: number; turned?: boolean; jumped?: boolean } => {
     if (exact()) {
-      // With overlaysContent nothing resizes: the keyboard simply covers its own height.
+      // With overlaysContent nothing resizes: the keyboard simply covers its own height, give or take where
+      // the page ends (see edge()).
       const h = round(vk!.boundingRect.height)
-      return { open: h > 0, inset: h, kb: h }
+      return { open: h > 0, inset: h && max(0, h + edge()), kb: h }
     }
     const ih = win.innerHeight
     const w = round(vv.width)
@@ -370,11 +391,17 @@ export function createKeyboard({
     }
   }
 
+  /** A tap tells where the page is on the screen (see edge()). Not while zoomed: zoom scales clientY, not screenY. */
+  const point = (e: Event) => {
+    if (vv.scale == 1) pageTop = (e as PointerEvent).screenY - (e as PointerEvent).clientY
+  }
+
   const events: [EventTarget | null | undefined, string, (e: Event) => void][] = [
     [vv, 'resize', sync],
     [vv, 'scroll', sync],
     [win, 'resize', sync],
     [vk, 'geometrychange', sync],
+    [win, 'pointerdown', point],
     [win, 'focusin', focus],
     // Tapping a field that is already focused reopens a keyboard dismissed with the Android back button.
     [win, 'click', focus],

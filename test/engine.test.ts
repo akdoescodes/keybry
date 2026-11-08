@@ -139,6 +139,63 @@ describe('Android Chrome, exact numbers from the VirtualKeyboard API', () => {
   })
 })
 
+describe('Android Chrome: the page does not end where Chrome measures the keyboard from', () => {
+  // Chrome reports the keyboard's height minus the navigation bar's, as if every page ended at the top of the
+  // navigation bar. Numbers from the lab emulator (Android 16, 412x915, 24px status bar, 24px gesture bar,
+  // 312px keyboard), checked against where Android says the keyboard is.
+  const CHROMIUM_159 = { availTop: 24, availHeight: 867 } // the screen minus the status and gesture bars
+  const CHROME_133 = { availTop: 0, availHeight: 915 } // the whole screen: says nothing about the bars
+
+  /** Opens a 312px keyboard on the exact path; returns how far the bar moved. */
+  const open = ({ ih, top, avail = CHROMIUM_159, ua = PIXEL.ua, tap = true }: { ih: number; top: number; avail?: object; ua?: string; tap?: boolean }) => {
+    vi.useFakeTimers({ now: 0 })
+    const device = { ...PIXEL, ua, ih }
+    const t = trace(device).trace
+    const env = fakeWindow(t.meta, t.events[0][2])
+    Object.assign(env.win.screen, avail)
+    const kb = createKeyboard({ win: env.win })
+    kb.dock({ style: {} } as HTMLElement)
+    if (tap) {
+      // The tap on the field says where the page is on the screen: 700px down the screen is 700 - top in the page.
+      const down = Object.assign(new Event('pointerdown'), { screenY: 700, clientY: 700 - top })
+      env.win.dispatchEvent(down)
+    }
+    env.doc.activeElement = element(TEXT)
+    env.fire('focusin', TEXT)
+    env.apply({ ...t.events[0][2], kb: 312, ov: true })
+    env.fire('geometrychange')
+    vi.advanceTimersByTime(500)
+    const height = kb.state.height
+    kb.destroy()
+    vi.useRealTimers()
+    return height
+  }
+
+  it('drawn under the gesture bar (viewport-fit=cover): the keyboard covers the gesture bar too', () => {
+    // Was 24px behind the keyboard.
+    expect(open({ ih: 834, top: 80 })).toBe(312 + 23)
+  })
+
+  it('above a toolbar at the bottom of the screen: the keyboard covers that much less', () => {
+    // Was 56px above the keyboard.
+    expect(open({ ih: 754, top: 81 })).toBe(312 - 56)
+  })
+
+  it('ending at the top of the navigation bar, as Chrome assumes: unchanged', () => {
+    expect(open({ ih: 811, top: 80 })).toBe(312)
+  })
+
+  it('a browser that reports the whole screen as available gets no correction', () => {
+    // Chrome 133 also stops drawing under the gesture bar while the keyboard is up, so its number was right.
+    expect(open({ ih: 835, top: 80, avail: CHROME_133 })).toBe(312)
+  })
+
+  it('no correction before the first tap, or outside Android', () => {
+    expect(open({ ih: 834, top: 80, tap: false })).toBe(312)
+    expect(open({ ih: 834, top: 80, ua: 'Chrome on a touch laptop (synthetic)' })).toBe(312)
+  })
+})
+
 describe('iPhone Safari', () => {
   it('reports only at the end of the animation: the prediction covers the gap', () => {
     const r = replay(
