@@ -31,8 +31,12 @@ export function fakeWindow(meta: Trace['meta'], first: Sample, storage = new Map
   const vk = meta.vk ? new FakeVirtualKeyboard() : undefined
   const css = new Map<string, string>()
   const viewport = { content: 'width=device-width, initial-scale=1' }
-  /** What 100lvh - 100svh measures: the room a browser keeps for its toolbars (Firefox: setDynamicToolbarMaxHeight). */
-  const room = { toolbars: 0 }
+  /**
+   * What keybry's probes for Firefox's toolbars read. `toolbars`: 100lvh - 100svh, the room a browser keeps for its
+   * toolbars (Firefox: setDynamicToolbarMaxHeight). `svh`: 100svh, by default the visible height (toolbars showing).
+   * `inset`: env(safe-area-inset-bottom).
+   */
+  const room = { toolbars: 0, svh: undefined as number | undefined, inset: 0 }
   const doc = {
     activeElement: null as unknown,
     documentElement: {
@@ -42,10 +46,14 @@ export function fakeWindow(meta: Trace['meta'], first: Sample, storage = new Map
       },
       append: () => {},
     },
-    // Only keybry's probe for Firefox's toolbar room.
+    // Only keybry's probes for Firefox's toolbars.
     createElement: () => {
       const style = { cssText: '' }
-      return { style, remove: () => {}, getBoundingClientRect: () => ({ height: /lvh/.test(style.cssText) ? room.toolbars : 0 }) }
+      const rect = () =>
+        /lvh/.test(style.cssText)
+          ? { height: room.toolbars, width: 0 }
+          : { height: room.svh ?? vv.height, width: /safe-area/.test(style.cssText) ? room.inset : 0 }
+      return { style, remove: () => {}, getBoundingClientRect: rect }
     },
     // The page's viewport tag, which keybry extends while something is docked.
     querySelector: (q: string) => (q == 'meta[name=viewport]' ? viewport : null),

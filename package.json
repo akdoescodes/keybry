@@ -1,7 +1,7 @@
 {
   "name": "keybry",
   "version": "0.1.0",
-  "description": "Keep chat bars and toolbars glued to the mobile keyboard. Predicts the keyboard before it opens, measures it, and learns. About 1.9 KB, zero dependencies.",
+  "description": "Keep chat bars and toolbars glued to the mobile keyboard. Predicts the keyboard before it opens, measures it, and learns. About 2.1 KB, zero dependencies.",
   "keywords": [
     "keyboard",
     "virtual-keyboard",

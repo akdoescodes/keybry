@@ -223,23 +223,57 @@ export function createKeyboard({
 
   const firefox = touch && /Firefox/.test(win.navigator.userAgent)
   /**
-   * Firefox for Android's expanded toolbar hides its navigation bar while the keyboard is up, but goes on leaving
-   * room for it below the page (it doesn't update setDynamicToolbarMaxHeight): an empty strip between the bar and
-   * Firefox's address bar, which no number a page can read covers. Firefox's own rule tells its size. The room for
-   * its toolbars is 100lvh - 100svh: 64dp (address bar, at the top) + 60dp (navigation bar), or 56dp + 48dp with the
-   * address bar at the bottom (getBrowserToolbarHeight, getBottomToolbarHeight in Firefox's source). Only those two
-   * totals are trusted; anything else (a tab strip, a survey prompt, a Firefox that changed) gets no correction.
-   * Read once per opening, with the keyboard up (a style recalculation; not every frame). Until then a prediction
-   * uses the strip from the last opening.
+   * Firefox for Android, read on a tap with the keyboard down (see focus()): where the page starts on the screen (NaN
+   * unless all of Firefox's toolbars are showing), the screen's height less the page's window (the status bar and the
+   * system navigation bar), and the bottom safe area.
+   */
+  let page = [NaN, 0, 0]
+  /** Sizes a fixed element with `css` and reads it back: a style recalculation, so only on a tap or an opening. */
+  const probe = (css: string) => {
+    const el = doc.createElement('i')
+    el.style.cssText = 'position:fixed;' + css
+    doc.documentElement.append(el)
+    const r = el.getBoundingClientRect()
+    el.remove()
+    return r
+  }
+  /**
+   * Firefox for Android hides its navigation bar (the expanded toolbar) and a tab bar at the bottom while the keyboard
+   * is up, but goes on leaving room for them below the page (it doesn't update setDynamicToolbarMaxHeight): an empty
+   * strip between the bar and Firefox's address bar or the keyboard, which no number a page can read covers.
+   *
+   * Firefox's own sizes tell it. In dp, which its CSS px are give or take a few per cent (getBrowserToolbarHeight,
+   * getTopToolbarHeight, getBottomToolbarHeight in Firefox's source): the address bar is 64 at the top, or at the
+   * bottom 64, 56 with the navigation bar; the navigation bar is 60 under an address bar at the top, 48 under one at
+   * the bottom; the tab bar is 56, above the page or below it. The room Firefox keeps for all of them is
+   * 100lvh - 100svh, but that can't tell a tab bar above the page (nothing hides) from one below it, and the simple
+   * toolbar with a tab bar is 4px from the expanded one. Where the page starts on the screen tells what's above
+   * it, less the status bar. The status bar and the system navigation bar under the window add up to the screen less
+   * the window, and neither can be negative. Firefox gives the system navigation bar as the bottom safe area, except
+   * (on 159) with nothing above the page, where it's 0; when it isn't 0, it pins the status bar exactly.
+   *
+   * Every layout that fits all of that is a candidate, and the smallest strip wins: when two still fit, the bar may
+   * stay above a strip, but never moves behind Firefox's address bar. Nothing fits (a survey prompt, toolbars
+   * scrolled away, a Firefox that changed): no correction. The room is read once per opening, with the keyboard up, so
+   * a Firefox that stops keeping it no longer matches. Until then a prediction uses the strip from the last opening.
    */
   const firefoxStrip = () => {
-    const probe = doc.createElement('i')
-    probe.style.cssText = 'position:fixed;height:calc(100lvh - 100svh)'
-    doc.documentElement.append(probe)
-    const room = probe.getBoundingClientRect().height
-    probe.remove()
-    // Within 4px: Firefox's CSS px are dp give or take a few per cent.
-    return abs(room - 124) < 4 ? 60 : abs(room - 104) < 4 ? 48 : 0
+    const room = probe('height:calc(100lvh - 100svh)').height
+    const [top, bars, inset] = page
+    let strip = 1e3
+    for (const url of [0, 64]) // the address bar: at the bottom (nothing above the page), or at the top
+      for (const nav of [0, url ? 60 : 48]) // the navigation bar, below the page
+        for (const tabs of [0, 56, -56]) {
+          // The tab bar: none, above the page, or below it. If this is the layout, the status bar is:
+          const status = top - url - max(tabs, 0)
+          if (
+            abs(room - url - (url ? 0 : nav ? 56 : 64) - nav - abs(tabs)) < 4 &&
+            min(status, bars - status) > -4 &&
+            (!inset || abs(bars - status - inset) < 4)
+          )
+            strip = min(strip, nav - min(tabs, 0)) // what hides: the navigation bar, and a tab bar below the page
+        }
+    return strip % 1e3
   }
 
   /** Reads the browser. `kb` is the keyboard's own height; `inset` is how much of the page it covers. */
@@ -364,6 +398,17 @@ export function createKeyboard({
     cancel(blurTimer)
     kind = k
     if (!state.open && touch) {
+      if (firefox) {
+        // For firefoxStrip(): read with the keyboard down, which takes the safe area while it's up. Where the page
+        // starts only counts with all of Firefox's toolbars showing (the visible height is 100svh): scrolled away,
+        // they move it up.
+        const r = probe('height:100svh;width:env(safe-area-inset-bottom)')
+        page = [
+          abs(vv.height - r.height) < 1 ? (win as { mozInnerScreenY?: number }).mozInnerScreenY! : NaN,
+          win.screen.height - win.outerHeight,
+          r.width,
+        ]
+      }
       const id = keyFor(k)
       const [a, b, land] = screen()
       // 1. The height saved last time on this device. 2. When the exact API is on, it answers

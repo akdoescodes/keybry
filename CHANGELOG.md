@@ -8,9 +8,9 @@
   - in Firefox it stays put when scrolling hides the toolbar (it slid behind the keyboard).
 
   keybry still lifts the bar the moment a field is tapped, by the keyboard height it saved, and hands over to the browser in the same frame, so the bar doesn't move twice.
-- Firefox's expanded toolbar: the bar moves down into the empty strip Firefox keeps for its hidden navigation bar while the keyboard is up (48px with the address bar at the bottom, 60px at the top). Recognised from the room Firefox keeps for its toolbars (`100lvh - 100svh`) matching Firefox's own sizes; anything else is left alone.
+- Firefox's hidden toolbars: while the keyboard is up, Firefox hides the navigation bar of its expanded toolbar and a tab bar at the bottom, but keeps their room below the page. The bar now moves down into that empty strip: 48px (navigation bar, address bar at the bottom), 60px (navigation bar, address bar at the top), 56px (tab bar at the bottom), or 104px and 116px (both). A tab bar at the top hides nothing, and the bar stays put. keybry tells the 12 toolbar layouts apart from Firefox's own sizes, using the room Firefox keeps for its toolbars (`100lvh - 100svh`) and where the page starts on the screen, both read on the tap. A layout it can't pin down is left alone, and when two layouts fit it uses the smaller strip, so the bar never ends up behind Firefox's address bar. Known problem: Firefox doesn't always draw inside the strip, so the moved bar can disappear (see `docs/design.md`).
 - Pages that set `interactive-widget` themselves, or turn the VirtualKeyboard API's `overlaysContent` on, are left alone.
-- Size: about 1.9 kB (was 1.7 kB).
+- Size: about 2.1 kB (was 1.7 kB).
 
 ## 0.1.0
 

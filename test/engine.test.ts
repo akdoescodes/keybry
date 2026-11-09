@@ -308,24 +308,49 @@ describe('browsers that shrink the page themselves (resizes-content in Chrome an
   })
 })
 
-describe("Firefox for Android's expanded toolbar: the room its hidden navigation bar keeps", () => {
-  // Firefox hides its navigation bar while the keyboard is up but keeps its room below the page. Firefox 159 on the
-  // lab emulator: 100lvh - 100svh is 104.7 (56dp address bar + 48dp navigation bar, both at the bottom) or 125.0
-  // (64dp address bar at the top + 60dp navigation bar); the empty strip measured 48 and 60.6 CSS px.
-  const FIREFOX = { ...PIXEL, ua: 'Mozilla/5.0 (Android 15; Mobile; rv:159.0) Gecko/159.0 Firefox/159.0', vk: false, ih: 767 }
+describe("Firefox for Android's toolbar layouts: the room its hidden bars keep", () => {
+  // Firefox hides its navigation bar (expanded toolbar) and a tab bar at the bottom while the keyboard is up, but keeps
+  // their room below the page. What the page read in Firefox 159 on the lab emulator (920 CSS px tall: a 24.15px status
+  // bar, a 871.7px window, a 24.15px gesture bar), for each layout in Settings › Customize, with the keyboard down:
+  // where the page starts on the screen (mozInnerScreenY), 100lvh - 100svh, and env(safe-area-inset-bottom). `strip`
+  // is the empty strip measured on the screen with the keyboard up.
+  const LAYOUTS = {
+    'address bar at the top': { top: 88.55, room: 64.4, inset: 24.1, strip: 0 },
+    'address bar at the top, expanded': { top: 88.55, room: 125, inset: 24.1, strip: 60 },
+    'address bar and tab bar at the top': { top: 144.9, room: 120.8, inset: 24.2, strip: 0 },
+    'address bar and tab bar at the top, expanded': { top: 144.9, room: 181.3, inset: 24.2, strip: 60 },
+    'address bar at the top, tab bar at the bottom': { top: 88.55, room: 120.8, inset: 24.2, strip: 56 },
+    'address bar at the top, tab bar at the bottom, expanded': { top: 88.55, room: 181.3, inset: 24.2, strip: 116 },
+    'address bar at the bottom': { top: 24.15, room: 64.4, inset: 0, strip: 0 },
+    'address bar at the bottom, expanded': { top: 24.15, room: 104.6, inset: 0, strip: 48 },
+    'tab bar at the top, address bar at the bottom': { top: 80.5, room: 120.8, inset: 24.2, strip: 0 },
+    'tab bar at the top, address bar at the bottom, expanded': { top: 80.5, room: 161, inset: 24.2, strip: 48 },
+    'address bar and tab bar at the bottom': { top: 24.15, room: 120.8, inset: 0, strip: 56 },
+    'address bar and tab bar at the bottom, expanded': { top: 24.15, room: 161, inset: 0, strip: 104 },
+  }
+  type Layout = (typeof LAYOUTS)[keyof typeof LAYOUTS]
+  const FIREFOX = { ...PIXEL, ua: 'Mozilla/5.0 (Android 15; Mobile; rv:159.0) Gecko/159.0 Firefox/159.0', vk: false }
+  const WINDOW = 871.7
+  const KEYBOARD = 314
 
-  /** Opens a 314px keyboard; Firefox shrinks the page itself (resizes-content). Returns the state and what was saved. */
-  const open = (toolbars: number, device = FIREFOX) => {
+  /**
+   * Taps a field, then opens the keyboard; Firefox shrinks the page itself (resizes-content). Returns the state and
+   * what was saved. `roomUp`: the room with the keyboard up. `scrolled`: Firefox's toolbars partly scrolled away.
+   */
+  const open = (layout: Layout, { ua = FIREFOX.ua, roomUp = layout.room, scrolled = false, moz = true } = {}) => {
     vi.useFakeTimers({ now: 0 })
-    const t = trace(device).trace
+    const svh = Math.round(WINDOW - layout.room)
+    const t = trace({ ...FIREFOX, ua, screen: [414, 920], iw: 414, ih: svh }).trace
     const env = fakeWindow(t.meta, t.events[0][2])
-    env.room.toolbars = toolbars
+    Object.assign(env.win, { outerHeight: Math.round(WINDOW), mozInnerScreenY: moz ? layout.top : undefined })
+    Object.assign(env.room, { toolbars: layout.room, inset: layout.inset, svh: scrolled ? svh - 30 : undefined })
     const kb = createKeyboard({ win: env.win })
     kb.dock({ style: {} } as HTMLElement)
     env.doc.activeElement = element(TEXT)
     env.fire('focusin', TEXT)
     vi.advanceTimersByTime(200)
-    env.apply({ ...t.events[0][2], ih: 767 - 314, h: 767 - 314 })
+    env.room.toolbars = roomUp
+    env.apply({ ...t.events[0][2], ih: svh - KEYBOARD, h: svh - KEYBOARD })
     env.fire('resize')
     vi.advanceTimersByTime(500)
     const result = { state: kb.state, saved: JSON.parse(env.storage.get('keybry') ?? '{}') }
@@ -334,49 +359,56 @@ describe("Firefox for Android's expanded toolbar: the room its hidden navigation
     return result
   }
 
-  it('address bar and navigation bar at the bottom: the bar moves 48px down onto the address bar', () => {
-    expect(open(104.7).state).toMatchObject({ phase: 'open', height: -48 })
+  it.each(Object.entries(LAYOUTS))('%s: the bar moves down by the strip', (_, layout) => {
+    expect(open(layout).state).toMatchObject({ phase: 'open', height: -layout.strip || 0 })
   })
 
-  it('address bar at the top: the bar moves 60px down onto the keyboard', () => {
-    expect(open(125).state).toMatchObject({ phase: 'open', height: -60 })
+  it('the tab bar below the page without the safe area: two layouts fit, so the bar stays put (never too low)', () => {
+    // Without the safe area, a 56px tab bar below the page (a 56px strip) can't be told from one above it with the
+    // address bar at the bottom (no strip) by an 8px taller status bar. Moving down there would put the bar behind
+    // Firefox's address bar.
+    const below = LAYOUTS['address bar at the top, tab bar at the bottom']
+    expect(open({ ...below, inset: 0 }).state).toMatchObject({ height: 0 })
+    // The others still tell.
+    expect(open({ ...LAYOUTS['address bar at the top, expanded'], inset: 0 }).state).toMatchObject({ height: -60 })
+    expect(open({ ...LAYOUTS['address bar and tab bar at the top'], inset: 0 }).state).toMatchObject({ height: 0 })
   })
 
-  it('no navigation bar (the simple toolbar): nothing to correct', () => {
-    expect(open(64.4).state).toMatchObject({ phase: 'open', height: 0 })
+  it('the simple toolbar with a tab bar is not taken for the expanded one, 4px away', () => {
+    // 120.8 is within 4px of the expanded toolbar's 124; with the tab bar at the top, nothing hides.
+    expect(open(LAYOUTS['address bar and tab bar at the top']).state).toMatchObject({ height: 0 })
+    expect(open(LAYOUTS['tab bar at the top, address bar at the bottom']).state).toMatchObject({ height: 0 })
   })
 
-  it('any other room (a tab strip, a survey prompt, a Firefox that changed) gets no correction', () => {
-    expect(open(104.7 + 40).state).toMatchObject({ phase: 'open', height: 0 })
-    expect(open(90).state).toMatchObject({ phase: 'open', height: 0 })
+  it('any other room (a survey prompt, a Firefox that changed) gets no correction', () => {
+    expect(open({ ...LAYOUTS['address bar at the bottom, expanded'], room: 104.6 + 40 }).state).toMatchObject({ height: 0 })
+    expect(open({ ...LAYOUTS['address bar at the top'], room: 90 }).state).toMatchObject({ height: 0 })
+  })
+
+  it("Firefox's toolbars scrolled away when the field is tapped: no correction", () => {
+    expect(open(LAYOUTS['address bar at the top, expanded'], { scrolled: true }).state).toMatchObject({ height: 0 })
+  })
+
+  it('without mozInnerScreenY: no correction', () => {
+    expect(open(LAYOUTS['address bar at the top, expanded'], { moz: false }).state).toMatchObject({ height: 0 })
   })
 
   it('only in Firefox', () => {
-    expect(open(125, { ...FIREFOX, ua: 'Android Chrome (synthetic)' }).state).toMatchObject({ height: 0 })
+    expect(open(LAYOUTS['address bar at the top, expanded'], { ua: 'Android Chrome (synthetic)' }).state).toMatchObject({
+      height: 0,
+    })
   })
 
   it("still saves the keyboard's height, so the next prediction lands where Firefox will put the page", () => {
-    expect(open(104.7).saved).toEqual({ textP412x915: 314 })
+    expect(open(LAYOUTS['address bar at the bottom, expanded']).saved).toEqual({ textP414x920: KEYBOARD })
   })
 
   it('a Firefox that stops keeping the room once the keyboard is up (the bug fixed) gets no correction', () => {
-    // Read with the keyboard up, not on focus: before the keyboard opens the room is still the full 104.7.
-    vi.useFakeTimers({ now: 0 })
-    const t = trace(FIREFOX).trace
-    const env = fakeWindow(t.meta, t.events[0][2])
-    env.room.toolbars = 104.7
-    const kb = createKeyboard({ win: env.win })
-    kb.dock({ style: {} } as HTMLElement)
-    env.doc.activeElement = element(TEXT)
-    env.fire('focusin', TEXT)
-    vi.advanceTimersByTime(200)
-    env.room.toolbars = 56.3 // only the address bar is left
-    env.apply({ ...t.events[0][2], ih: 767 - 314 + 48, h: 767 - 314 + 48 })
-    env.fire('resize')
-    vi.advanceTimersByTime(500)
-    expect(kb.state).toMatchObject({ phase: 'open', height: 0 })
-    kb.destroy()
-    vi.useRealTimers()
+    // The room is read with the keyboard up, not on the tap: before the keyboard opens it is still the full room.
+    expect(open(LAYOUTS['address bar at the bottom, expanded'], { roomUp: 56.3 }).state).toMatchObject({ height: 0 })
+    expect(open(LAYOUTS['address bar at the top, expanded'], { roomUp: 64.4 }).state).toMatchObject({ height: 0 })
+    const below = LAYOUTS['address bar at the top, tab bar at the bottom, expanded']
+    expect(open(below, { roomUp: 64.4 }).state).toMatchObject({ height: 0 })
   })
 })
 
