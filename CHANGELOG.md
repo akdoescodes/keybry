@@ -8,8 +8,9 @@
   - in Firefox it stays put when scrolling hides the toolbar (it slid behind the keyboard).
 
   keybry still lifts the bar the moment a field is tapped, by the keyboard height it saved, and hands over to the browser in the same frame, so the bar doesn't move twice.
+- Firefox's expanded toolbar: the bar moves down into the empty strip Firefox keeps for its hidden navigation bar while the keyboard is up (48px with the address bar at the bottom, 60px at the top). Recognised from the room Firefox keeps for its toolbars (`100lvh - 100svh`) matching Firefox's own sizes; anything else is left alone.
 - Pages that set `interactive-widget` themselves, or turn the VirtualKeyboard API's `overlaysContent` on, are left alone.
-- Size: about 1.8 kB (was 1.7 kB).
+- Size: about 1.9 kB (was 1.7 kB).
 
 ## 0.1.0
 

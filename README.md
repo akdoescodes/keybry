@@ -13,7 +13,7 @@
 - **The browser's own move where it's right.** On Android, keybry asks Chrome and Firefox to resize the page for the keyboard, as ChatGPT and claude.ai do: they move the bar from Android's real keyboard position, and drop it within a frame or two of a close. keybry lifts it the moment a field is tapped and hands over without a visible move. In Safari, keybry moves it from the visual viewport.
 - **No bounce.** Hopping between fields, or the keyboard closing and reopening, doesn't make the bar jump.
 - **Fast.** Moves your element with a GPU transform. No layout, no React re-renders.
-- **Small.** About 1.8 kB min+brotli, with zero dependencies, and it's safe for server rendering.
+- **Small.** About 1.9 kB min+brotli, with zero dependencies, and it's safe for server rendering.
 
 ```sh
 npm install keybry
@@ -183,7 +183,7 @@ From `keybry/recorder` (a separate import, not part of the core):
 - **Use 16px or larger text in inputs.** Smaller text makes iOS zoom the page on focus, which moves everything.
 - **While something is docked, the page resizes for the keyboard.** keybry adds `interactive-widget=resizes-content` to your viewport tag, and gives the tag back when nothing is docked. Chrome and Firefox on Android then shrink the page when the keyboard opens, so `100dvh` layouts, scrolling inputs into view and the bar all follow the keyboard. If your tag already sets `interactive-widget`, keybry leaves it alone. Pages without a viewport tag aren't changed.
 - **Why not Chrome's VirtualKeyboard API.** On Android, Chrome measures the keyboard from the top of the navigation bar, so with its bottom toolbar, or a page drawn under the gesture bar (`viewport-fit=cover`), the number is off by that much, and it reports a close only near the end of the keyboard's slide. If your page turns `overlaysContent` on itself, keybry uses that number as is.
-- **Firefox's expanded toolbar** (address bar and navigation bar at the bottom) keeps a 48 px empty strip below the page while the keyboard is up: it hides the navigation bar but keeps its room. No page can see it, so the bar sits 48 px above Firefox's address bar there.
+- **Firefox's expanded toolbar** hides its navigation bar while the keyboard is up but keeps its room below the page: an empty strip (48 px with the address bar at the bottom, 60 px with it at the top) that no page number covers. keybry recognises the two layouts from the room Firefox keeps for its toolbars (`100lvh - 100svh`, Firefox's own sizes) and moves the bar down into the strip. Any other room (a tab strip, a survey prompt, a Firefox that changed its sizes) is left alone, so the strip shows there.
 - **`dock()` takes over the element's inline `transform`.** Put your own transforms on a wrapper.
 - **The first open on a device is a guess.** It's deliberately on the tall side, because a bar that starts a little high and settles looks fine, and a bar hidden behind the keyboard does not. From the second open, the saved height is used.
 - **Short strips count too.** The iPad shortcut bar shown with a hardware keyboard, or Chrome's autofill bar, is far shorter than a keyboard. The bar still sits on top of it.

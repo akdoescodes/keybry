@@ -308,6 +308,78 @@ describe('browsers that shrink the page themselves (resizes-content in Chrome an
   })
 })
 
+describe("Firefox for Android's expanded toolbar: the room its hidden navigation bar keeps", () => {
+  // Firefox hides its navigation bar while the keyboard is up but keeps its room below the page. Firefox 159 on the
+  // lab emulator: 100lvh - 100svh is 104.7 (56dp address bar + 48dp navigation bar, both at the bottom) or 125.0
+  // (64dp address bar at the top + 60dp navigation bar); the empty strip measured 48 and 60.6 CSS px.
+  const FIREFOX = { ...PIXEL, ua: 'Mozilla/5.0 (Android 15; Mobile; rv:159.0) Gecko/159.0 Firefox/159.0', vk: false, ih: 767 }
+
+  /** Opens a 314px keyboard; Firefox shrinks the page itself (resizes-content). Returns the state and what was saved. */
+  const open = (toolbars: number, device = FIREFOX) => {
+    vi.useFakeTimers({ now: 0 })
+    const t = trace(device).trace
+    const env = fakeWindow(t.meta, t.events[0][2])
+    env.room.toolbars = toolbars
+    const kb = createKeyboard({ win: env.win })
+    kb.dock({ style: {} } as HTMLElement)
+    env.doc.activeElement = element(TEXT)
+    env.fire('focusin', TEXT)
+    vi.advanceTimersByTime(200)
+    env.apply({ ...t.events[0][2], ih: 767 - 314, h: 767 - 314 })
+    env.fire('resize')
+    vi.advanceTimersByTime(500)
+    const result = { state: kb.state, saved: JSON.parse(env.storage.get('keybry') ?? '{}') }
+    kb.destroy()
+    vi.useRealTimers()
+    return result
+  }
+
+  it('address bar and navigation bar at the bottom: the bar moves 48px down onto the address bar', () => {
+    expect(open(104.7).state).toMatchObject({ phase: 'open', height: -48 })
+  })
+
+  it('address bar at the top: the bar moves 60px down onto the keyboard', () => {
+    expect(open(125).state).toMatchObject({ phase: 'open', height: -60 })
+  })
+
+  it('no navigation bar (the simple toolbar): nothing to correct', () => {
+    expect(open(64.4).state).toMatchObject({ phase: 'open', height: 0 })
+  })
+
+  it('any other room (a tab strip, a survey prompt, a Firefox that changed) gets no correction', () => {
+    expect(open(104.7 + 40).state).toMatchObject({ phase: 'open', height: 0 })
+    expect(open(90).state).toMatchObject({ phase: 'open', height: 0 })
+  })
+
+  it('only in Firefox', () => {
+    expect(open(125, { ...FIREFOX, ua: 'Android Chrome (synthetic)' }).state).toMatchObject({ height: 0 })
+  })
+
+  it("still saves the keyboard's height, so the next prediction lands where Firefox will put the page", () => {
+    expect(open(104.7).saved).toEqual({ textP412x915: 314 })
+  })
+
+  it('a Firefox that stops keeping the room once the keyboard is up (the bug fixed) gets no correction', () => {
+    // Read with the keyboard up, not on focus: before the keyboard opens the room is still the full 104.7.
+    vi.useFakeTimers({ now: 0 })
+    const t = trace(FIREFOX).trace
+    const env = fakeWindow(t.meta, t.events[0][2])
+    env.room.toolbars = 104.7
+    const kb = createKeyboard({ win: env.win })
+    kb.dock({ style: {} } as HTMLElement)
+    env.doc.activeElement = element(TEXT)
+    env.fire('focusin', TEXT)
+    vi.advanceTimersByTime(200)
+    env.room.toolbars = 56.3 // only the address bar is left
+    env.apply({ ...t.events[0][2], ih: 767 - 314 + 48, h: 767 - 314 + 48 })
+    env.fire('resize')
+    vi.advanceTimersByTime(500)
+    expect(kb.state).toMatchObject({ phase: 'open', height: 0 })
+    kb.destroy()
+    vi.useRealTimers()
+  })
+})
+
 describe('no on-screen keyboard', () => {
   it('iPad with a hardware keyboard: gives up after `wait`, then remembers', () => {
     const storage = new Map<string, string>()

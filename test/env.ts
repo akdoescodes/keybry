@@ -31,6 +31,8 @@ export function fakeWindow(meta: Trace['meta'], first: Sample, storage = new Map
   const vk = meta.vk ? new FakeVirtualKeyboard() : undefined
   const css = new Map<string, string>()
   const viewport = { content: 'width=device-width, initial-scale=1' }
+  /** What 100lvh - 100svh measures: the room a browser keeps for its toolbars (Firefox: setDynamicToolbarMaxHeight). */
+  const room = { toolbars: 0 }
   const doc = {
     activeElement: null as unknown,
     documentElement: {
@@ -38,6 +40,12 @@ export function fakeWindow(meta: Trace['meta'], first: Sample, storage = new Map
         setProperty: (k: string, v: string) => void css.set(k, v),
         removeProperty: (k: string) => void css.delete(k),
       },
+      append: () => {},
+    },
+    // Only keybry's probe for Firefox's toolbar room.
+    createElement: () => {
+      const style = { cssText: '' }
+      return { style, remove: () => {}, getBoundingClientRect: () => ({ height: /lvh/.test(style.cssText) ? room.toolbars : 0 }) }
     },
     // The page's viewport tag, which keybry extends while something is docked.
     querySelector: (q: string) => (q == 'meta[name=viewport]' ? viewport : null),
@@ -100,7 +108,7 @@ export function fakeWindow(meta: Trace['meta'], first: Sample, storage = new Map
   }
 
   apply(first)
-  return { win: win as Window, vk, css, doc, storage, viewport, apply, fire, dispatch }
+  return { win: win as Window, vk, css, doc, storage, viewport, room, apply, fire, dispatch }
 }
 
 /** What a docked bar should be at: how far the keyboard really covers the page. */

@@ -76,7 +76,7 @@ interface VirtualKeyboard extends EventTarget {
 type Motion = 0 | 1 | 2
 type Inner = (state: KeyboardState, motion?: Motion) => void
 
-const { max, min, round } = Math
+const { abs, max, min, round } = Math
 
 /** Written on <html>, for CSS: `transform: translateY(calc(-1 * var(--keyboard-height)))`. */
 const VAR = '--keyboard-height'
@@ -183,6 +183,8 @@ export function createKeyboard({
   let predictedAt = 0
   /** innerHeight when the prediction started: how much the page itself has shrunk since is the browser's share. */
   let focusIh = 0
+  /** Firefox for Android: the empty room below the page while the keyboard is up (see firefoxStrip()). */
+  let strip = 0
   /** When focus last left a field (moving between fields always passes through here). */
   let moved = 0
   let gaveUp = false
@@ -218,6 +220,27 @@ export function createKeyboard({
   const learn = (height: number) => save(keyFor(kind as Kind), height)
 
   const exact = () => vk?.overlaysContent
+
+  const firefox = touch && /Firefox/.test(win.navigator.userAgent)
+  /**
+   * Firefox for Android's expanded toolbar hides its navigation bar while the keyboard is up, but goes on leaving
+   * room for it below the page (it doesn't update setDynamicToolbarMaxHeight): an empty strip between the bar and
+   * Firefox's address bar, which no number a page can read covers. Firefox's own rule tells its size. The room for
+   * its toolbars is 100lvh - 100svh: 64dp (address bar, at the top) + 60dp (navigation bar), or 56dp + 48dp with the
+   * address bar at the bottom (getBrowserToolbarHeight, getBottomToolbarHeight in Firefox's source). Only those two
+   * totals are trusted; anything else (a tab strip, a survey prompt, a Firefox that changed) gets no correction.
+   * Read once per opening, with the keyboard up (a style recalculation; not every frame). Until then a prediction
+   * uses the strip from the last opening.
+   */
+  const firefoxStrip = () => {
+    const probe = doc.createElement('i')
+    probe.style.cssText = 'position:fixed;height:calc(100lvh - 100svh)'
+    doc.documentElement.append(probe)
+    const room = probe.getBoundingClientRect().height
+    probe.remove()
+    // Within 4px: Firefox's CSS px are dp give or take a few per cent.
+    return abs(room - 124) < 4 ? 60 : abs(room - 104) < 4 ? 48 : 0
+  }
 
   /** Reads the browser. `kb` is the keyboard's own height; `inset` is how much of the page it covers. */
   const measure = (): { open: boolean; inset: number; kb: number; turned?: boolean; jumped?: boolean } => {
@@ -262,7 +285,7 @@ export function createKeyboard({
     if (next.height == state.height && next.phase == state.phase && next.source == state.source) return
     // Save real heights, not iOS panning the page while the keyboard sits still. Where the browser lifted the bar
     // itself (0 left for keybry), save the keyboard's height: what the next prediction should lift it by.
-    if (motion && kind && next.phase == 'open') learn(next.height || keyboard)
+    if (motion && kind && next.phase == 'open') learn(next.height + strip || keyboard)
     state = next
     style.setProperty(VAR, next.height + 'px')
     listeners.forEach((fn) => fn(next, motion))
@@ -283,11 +306,14 @@ export function createKeyboard({
       }
       predicted = 0
       cancel(waitTimer)
-      next = make(m.inset, 'open', exact() ? 'exact' : 'measured')
+      // Once per opening, with the keyboard up: when the strip is there to measure. A Firefox that stops keeping
+      // the room no longer matches, and the bar stays where Firefox puts it.
+      if (firefox && state.phase != 'open') strip = firefoxStrip()
+      next = make(m.inset - strip, 'open', exact() ? 'exact' : 'measured')
     } else if (kind && predicted) {
       // The page may have got shorter for the keyboard already (see dock()): the browser has lifted the bar that
       // much, so keybry lifts it that much less.
-      next = make(max(0, predicted - max(0, focusIh - win.innerHeight)), 'opening', 'predicted')
+      next = make(max(0, predicted - max(0, focusIh - win.innerHeight)) - strip, 'opening', 'predicted')
     }
     // The browser moved the bar this frame, by resizing the page: take over from it in the same frame, without
     // animating, or the bar is lifted twice (it sat a whole keyboard too high for 0.1 s on Chrome). Then save the
